@@ -133,6 +133,46 @@ body,
   background: #fff;
 }
 
+/* Shown when the chart has no visible boxes. */
+.empty-state {
+  max-width: 380px;
+  margin: 8vh auto 0;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px 30px;
+  text-align: center;
+  box-shadow: 0 2px 14px rgba(12, 35, 64, 0.1);
+}
+
+.empty-state h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  color: var(--force);
+}
+
+.empty-state p {
+  margin: 0 0 16px;
+  font-size: 13.5px;
+  color: #6b7a8d;
+  line-height: 1.5;
+}
+
+.empty-state button {
+  background: var(--force);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 9px 16px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.empty-state button:hover {
+  background: var(--midnight);
+}
+
 /* --------------------------------------------------------- side panel */
 .side-panel {
   /* Width is driven inline by the resizable-panel state in App.tsx. */

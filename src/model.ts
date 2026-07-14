@@ -239,3 +239,51 @@ export function moveNode(chart: OrgChart, id: string, dir: -1 | 1): OrgChart {
   loc.list.splice(j, 0, n)
   return next
 }
+
+/** Deep-copy a subtree, assigning fresh ids to every node. */
+function copyWithNewIds(node: OrgNode): OrgNode {
+  return {
+    ...clone(node),
+    id: uid(),
+    children: (node.children ?? []).map(copyWithNewIds),
+  }
+}
+
+/** Duplicate a node (and its whole subtree) as the next sibling. */
+export function duplicateNode(chart: OrgChart, id: string): { chart: OrgChart; newId: string } {
+  const next = clone(chart)
+  const loc = findContainer(next, id)
+  if (!loc) return { chart, newId: id }
+  const copy = copyWithNewIds(loc.list[loc.index])
+  loc.list.splice(loc.index + 1, 0, copy)
+  return { chart: next, newId: copy.id }
+}
+
+/** Current chart schema version. Bump when the shape changes and add a branch
+ *  in {@link normalizeChart} to migrate older documents forward. */
+export const CHART_VERSION = 1
+
+/**
+ * Validate and normalize an untrusted chart (from localStorage, an imported
+ * file, or the JSON tab): fill defaults, coerce the shape, migrate old versions
+ * forward, and strip off-brand colors. Throws a clear message on invalid input.
+ */
+export function normalizeChart(input: unknown): OrgChart {
+  if (!input || typeof input !== 'object') throw new Error('Not a chart object.')
+  const c = input as Partial<OrgChart> & { meta?: Partial<OrgChart['meta']> }
+  if (!Array.isArray(c.roots) || c.roots.length === 0) {
+    throw new Error('Missing a non-empty "roots" array.')
+  }
+  const chart: OrgChart = {
+    version: CHART_VERSION,
+    meta: {
+      title: typeof c.meta?.title === 'string' ? c.meta.title : 'Org Chart',
+      showTitle: c.meta?.showTitle !== false,
+    },
+    roots: c.roots as OrgNode[],
+    groups: Array.isArray(c.groups) ? c.groups : [],
+    comms: Array.isArray(c.comms) ? c.comms : [],
+    legend: Array.isArray(c.legend) ? c.legend : [],
+  }
+  return sanitizeColors(chart)
+}
