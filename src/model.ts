@@ -105,11 +105,13 @@ export interface LegendItem {
 /** Flow direction of the auto-layout: top-down, bottom-up, left-right, right-left. */
 export type Direction = 'TB' | 'BT' | 'LR' | 'RL'
 
-/** Auto-layout strategy. 'tree' is the tidy-tree (with a Direction); 'radial'
- *  places the root at the center with descendants on concentric rings;
- *  'layered' ranks every node into depth-aligned rows (Sugiyama-lite) and pulls
- *  cross-linked nodes together, for matrix / dotted-line org relationships. */
-export type LayoutMode = 'tree' | 'radial' | 'layered'
+/** Auto-layout strategy:
+ *  - 'tree'     tidy-tree hierarchy (honors a Direction)
+ *  - 'radial'   root at the center, descendants on concentric rings
+ *  - 'layered'  depth-aligned rows (Sugiyama-lite), cross-links pulled together
+ *  - 'matrix'   2D grid: rows = depth, columns = group (or root)
+ *  - 'swimlane' independent vertical lanes, one per group (or root) */
+export type LayoutMode = 'tree' | 'radial' | 'layered' | 'matrix' | 'swimlane'
 
 export interface OrgChart {
   version: 1
@@ -347,7 +349,8 @@ export function normalizeChart(input: unknown): OrgChart {
   const dir = c.meta?.direction
   const dirOk = dir === 'TB' || dir === 'BT' || dir === 'LR' || dir === 'RL'
   const layout = c.meta?.layout
-  const layoutOk = layout === 'tree' || layout === 'radial' || layout === 'layered'
+  const LAYOUTS = ['tree', 'radial', 'layered', 'matrix', 'swimlane']
+  const layoutOk = typeof layout === 'string' && LAYOUTS.includes(layout)
   const chart: OrgChart = {
     version: CHART_VERSION,
     meta: {

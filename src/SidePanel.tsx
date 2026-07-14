@@ -69,6 +69,8 @@ const LAYOUT_MODES: { value: LayoutMode; label: string }[] = [
   { value: 'tree', label: 'Tree (hierarchy)' },
   { value: 'radial', label: 'Radial (rings)' },
   { value: 'layered', label: 'Layered (ranked rows)' },
+  { value: 'matrix', label: 'Matrix (grid by group)' },
+  { value: 'swimlane', label: 'Swimlane (lanes by group)' },
 ]
 
 const DIRECTIONS: { value: Direction; label: string }[] = [
