@@ -9,7 +9,7 @@ import {
   useState,
 } from 'react'
 import { ChartSvg } from './ChartSvg'
-import { copyPngToClipboard, exportJson, exportPng, exportSvg } from './export'
+import { copyPngToClipboard, copySvgToClipboard, exportJson, exportPng, exportSvg } from './export'
 import { exportPdf } from './pdf'
 import { exportPptx } from './pptx'
 import { layoutChart, previewDrag } from './layout'
@@ -81,6 +81,7 @@ export default function App() {
   // Live position while a box is being dragged (not yet committed to history).
   const [drag, setDrag] = useState<{ id: string; x: number; y: number } | null>(null)
   const [copyState, setCopyState] = useState<'idle' | 'done' | 'error'>('idle')
+  const [copySvgState, setCopySvgState] = useState<'idle' | 'done' | 'error'>('idle')
   const svgHostRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
   const canvasWrapRef = useRef<HTMLDivElement>(null)
@@ -659,6 +660,19 @@ export default function App() {
           }}
         >
           {copyState === 'done' ? '✓ Copied' : copyState === 'error' ? 'Copy failed' : 'Copy image'}
+        </button>
+        <button
+          title="Copy the chart as SVG (vector) — paste into design tools or a code editor"
+          onClick={() => {
+            const svg = getSvg()
+            if (!svg) return
+            copySvgToClipboard(svg)
+              .then(() => setCopySvgState('done'))
+              .catch(() => setCopySvgState('error'))
+              .finally(() => window.setTimeout(() => setCopySvgState('idle'), 2000))
+          }}
+        >
+          {copySvgState === 'done' ? '✓ Copied' : copySvgState === 'error' ? 'Copy failed' : 'Copy SVG'}
         </button>
         <button onClick={() => { const svg = getSvg(); if (svg) exportSvg(svg, chart.meta.title) }}>
           Export SVG

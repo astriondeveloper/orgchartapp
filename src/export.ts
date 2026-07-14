@@ -96,6 +96,31 @@ export async function copyPngToClipboard(svgEl: SVGSVGElement, scale = 2): Promi
   await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
 }
 
+/** Copy the chart as SVG to the clipboard for vector-aware apps. Tries a rich
+ *  write (image/svg+xml + text) and falls back to copying the SVG markup as
+ *  plain text, which pastes into design tools and code editors everywhere. */
+export async function copySvgToClipboard(svgEl: SVGSVGElement): Promise<void> {
+  const svg = svgMarkup(svgEl)
+  if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'image/svg+xml': new Blob([svg], { type: 'image/svg+xml' }),
+          'text/plain': new Blob([svg], { type: 'text/plain' }),
+        }),
+      ])
+      return
+    } catch {
+      /* Many browsers reject image/svg+xml on write; fall back to text. */
+    }
+  }
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(svg)
+    return
+  }
+  throw new Error('Copy is not supported in this browser — use the SVG download instead.')
+}
+
 export function exportJson(chart: OrgChart): void {
   download(
     new Blob([JSON.stringify(chart, null, 2)], { type: 'application/json' }),
