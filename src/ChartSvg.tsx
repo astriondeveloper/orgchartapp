@@ -1,5 +1,7 @@
 import type { JSX } from 'react'
+import { textWidth } from './layout'
 import type { Layout, PlacedNode } from './layout'
+import { edgeArrow } from './model'
 import type { BadgeType, LegendMarker } from './model'
 import { brand, metrics as M, readableText, variantFill, zoneFill } from './theme'
 
@@ -345,18 +347,52 @@ export function ChartSvg({ layout, selectedId, onSelect }: Props) {
         ))}
       </g>
 
-      {/* Communication arrows render under the boxes so long runs stay tidy;
-          the arrowheads at box edges remain visible. */}
+      {/* Edges render under the boxes so long runs stay tidy; the arrowheads at
+          box edges remain visible. Each edge carries its own style + arrows. */}
       <g stroke={brand.comm} strokeWidth={2} fill="none">
-        {comms.map((c) => (
-          <path
-            key={c.link.id}
-            d={c.path}
-            markerEnd="url(#commArrow)"
-            markerStart={c.link.twoWay === false ? undefined : 'url(#commArrow)'}
-          />
-        ))}
+        {comms.map((c) => {
+          const arrow = edgeArrow(c.link)
+          return (
+            <path
+              key={c.link.id}
+              d={c.path}
+              strokeDasharray={c.link.style === 'dashed' ? '6 4' : undefined}
+              markerEnd={arrow === 'end' || arrow === 'both' ? 'url(#commArrow)' : undefined}
+              markerStart={arrow === 'start' || arrow === 'both' ? 'url(#commArrow)' : undefined}
+            />
+          )
+        })}
       </g>
+
+      {/* Edge labels: a small white plate so the text reads over any lines. */}
+      {comms.map((c) => {
+        if (!c.link.label) return null
+        const lw = textWidth(c.link.label, 10.5)
+        return (
+          <g key={`${c.link.id}-label`}>
+            <rect
+              x={c.labelPos.x - lw / 2 - 4}
+              y={c.labelPos.y - 9}
+              width={lw + 8}
+              height={17}
+              rx={3}
+              fill={brand.white}
+              stroke={brand.detailBorder}
+              strokeWidth={0.75}
+            />
+            <text
+              x={c.labelPos.x}
+              y={c.labelPos.y + 3.5}
+              textAnchor="middle"
+              fontSize={10.5}
+              fill={brand.comm}
+              fontFamily={brand.fontFamily}
+            >
+              {c.link.label}
+            </text>
+          </g>
+        )
+      })}
 
       {placed.map((p) => (
         <NodeBox key={p.node.id} p={p} selected={p.node.id === selectedId} onSelect={onSelect} />

@@ -5,6 +5,7 @@ import {
   allNodes,
   deleteNode,
   duplicateNode,
+  edgeArrow,
   emptyChart,
   findNode,
   normalizeChart,
@@ -139,5 +140,34 @@ describe('normalizeChart', () => {
       roots: [{ id: 'a', title: 'A', variant: 'primary' }],
     })
     expect(chart.meta).toEqual({ title: 'Mine', showTitle: false })
+  })
+})
+
+describe('edges', () => {
+  it('edgeArrow migrates twoWay and honors an explicit arrow', () => {
+    expect(edgeArrow({ id: 'e', fromId: 'a', toId: 'b' })).toBe('both')
+    expect(edgeArrow({ id: 'e', fromId: 'a', toId: 'b', twoWay: false })).toBe('end')
+    expect(edgeArrow({ id: 'e', fromId: 'a', toId: 'b', twoWay: true })).toBe('both')
+    expect(edgeArrow({ id: 'e', fromId: 'a', toId: 'b', arrow: 'start' })).toBe('start')
+  })
+
+  it('normalizeChart migrates legacy edges and validates fields', () => {
+    const chart = normalizeChart({
+      roots: [
+        { id: 'a', title: 'A', variant: 'primary' },
+        { id: 'b', title: 'B', variant: 'primary' },
+      ],
+      comms: [
+        { id: 'e1', fromId: 'a', toId: 'b', twoWay: false },
+        { id: 'e2', fromId: 'a', toId: 'b', style: 'weird', arrow: 'nope', label: '   ' },
+        { id: 'e3', fromId: 'a', toId: 'b', style: 'dashed', arrow: 'start', label: 'reports' },
+      ],
+    })
+    expect(chart.comms[0]).toMatchObject({ arrow: 'end', style: 'solid' })
+    expect(chart.comms[0].label).toBeUndefined()
+    // Invalid style/arrow fall back to defaults; blank label is dropped.
+    expect(chart.comms[1]).toMatchObject({ arrow: 'both', style: 'solid' })
+    expect(chart.comms[1].label).toBeUndefined()
+    expect(chart.comms[2]).toMatchObject({ arrow: 'start', style: 'dashed', label: 'reports' })
   })
 })

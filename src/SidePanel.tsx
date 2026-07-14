@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import type {
   BadgeType,
+  CommLink,
   Direction,
+  EdgeArrow,
+  EdgeStyle,
   LegendMarker,
   OrgChart,
   OrgNode,
@@ -14,6 +17,7 @@ import {
   allNodes,
   clone,
   deleteNode,
+  edgeArrow,
   findNode,
   moveNode,
   normalizeChart,
@@ -64,6 +68,18 @@ const DIRECTIONS: { value: Direction; label: string }[] = [
   { value: 'BT', label: 'Bottom-up ↑' },
   { value: 'LR', label: 'Left-right →' },
   { value: 'RL', label: 'Right-left ←' },
+]
+
+const EDGE_STYLES: { value: EdgeStyle; label: string }[] = [
+  { value: 'solid', label: 'Solid line' },
+  { value: 'dashed', label: 'Dashed line' },
+]
+
+const EDGE_ARROWS: { value: EdgeArrow; label: string }[] = [
+  { value: 'both', label: 'Arrows: both ⇄' },
+  { value: 'end', label: 'Arrow: to → ' },
+  { value: 'start', label: 'Arrow: from ←' },
+  { value: 'none', label: 'Arrows: none' },
 ]
 
 const ZONE_STYLES: { value: ZoneStyle; label: string }[] = [
@@ -349,36 +365,44 @@ function ChartEditor({ chart, onChange, onSelect }: Props) {
       </fieldset>
 
       <fieldset>
-        <legend>Communication channels</legend>
-        {chart.comms.map((c, ci) => (
-          <div key={c.id} className="detail-row">
-            <select
-              value={c.fromId}
-              onChange={(e) => {
-                const comms = clone(chart.comms)
-                comms[ci] = { ...comms[ci], fromId: e.target.value }
-                onChange({ ...chart, comms })
-              }}
-            >
-              {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-            </select>
-            <span className="arrow">⇄</span>
-            <select
-              value={c.toId}
-              onChange={(e) => {
-                const comms = clone(chart.comms)
-                comms[ci] = { ...comms[ci], toId: e.target.value }
-                onChange({ ...chart, comms })
-              }}
-            >
-              {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-            </select>
-            <button
-              className="danger sm"
-              onClick={() => onChange({ ...chart, comms: chart.comms.filter((x) => x.id !== c.id) })}
-            >×</button>
-          </div>
-        ))}
+        <legend>Edges (connections)</legend>
+        {chart.comms.map((c, ci) => {
+          const patchEdge = (p: Partial<CommLink>) => {
+            const comms = clone(chart.comms)
+            comms[ci] = { ...comms[ci], ...p }
+            onChange({ ...chart, comms })
+          }
+          return (
+            <div key={c.id} className="card">
+              <div className="detail-row">
+                <select value={c.fromId} onChange={(e) => patchEdge({ fromId: e.target.value })}>
+                  {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </select>
+                <span className="arrow">→</span>
+                <select value={c.toId} onChange={(e) => patchEdge({ toId: e.target.value })}>
+                  {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </select>
+                <button
+                  className="danger sm"
+                  onClick={() => onChange({ ...chart, comms: chart.comms.filter((x) => x.id !== c.id) })}
+                >×</button>
+              </div>
+              <div className="two-col">
+                <select value={c.style ?? 'solid'} onChange={(e) => patchEdge({ style: e.target.value as EdgeStyle })}>
+                  {EDGE_STYLES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </select>
+                <select value={edgeArrow(c)} onChange={(e) => patchEdge({ arrow: e.target.value as EdgeArrow })}>
+                  {EDGE_ARROWS.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
+                </select>
+              </div>
+              <input
+                value={c.label ?? ''}
+                placeholder="Edge label (optional)"
+                onChange={(e) => patchEdge({ label: e.target.value || undefined })}
+              />
+            </div>
+          )
+        })}
         <button
           disabled={options.length < 2}
           onClick={() =>
@@ -386,11 +410,11 @@ function ChartEditor({ chart, onChange, onSelect }: Props) {
               ...chart,
               comms: [
                 ...chart.comms,
-                { id: uid('c'), fromId: options[0].id, toId: options[1].id, twoWay: true },
+                { id: uid('c'), fromId: options[0].id, toId: options[1].id, arrow: 'both', style: 'solid' },
               ],
             })
           }
-        >+ Communication line</button>
+        >+ Edge</button>
       </fieldset>
 
       <fieldset>

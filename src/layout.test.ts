@@ -119,3 +119,33 @@ describe('layout direction', () => {
     expect(lr.height).toBeGreaterThan(tb.height)
   })
 })
+
+describe('edges', () => {
+  it('resolves each edge to a path with a finite label position', () => {
+    const chart: OrgChart = {
+      version: 1,
+      meta: { title: 'T', showTitle: true },
+      roots: [{ id: 'a', title: 'A', variant: 'primary', children: [{ id: 'b', title: 'B', variant: 'secondary' }] }],
+      groups: [],
+      comms: [{ id: 'e', fromId: 'a', toId: 'b', arrow: 'both', style: 'solid' }],
+      legend: [],
+    }
+    const l = layoutChart(chart)
+    expect(l.comms).toHaveLength(1)
+    expect(l.comms[0].path.startsWith('M')).toBe(true)
+    expect(Number.isFinite(l.comms[0].labelPos.x)).toBe(true)
+    expect(Number.isFinite(l.comms[0].labelPos.y)).toBe(true)
+  })
+
+  it('drops edges whose endpoints do not exist', () => {
+    const chart: OrgChart = {
+      version: 1,
+      meta: { title: 'T', showTitle: true },
+      roots: [{ id: 'a', title: 'A', variant: 'primary' }],
+      groups: [],
+      comms: [{ id: 'e', fromId: 'a', toId: 'ghost', arrow: 'end', style: 'solid' }],
+      legend: [],
+    }
+    expect(layoutChart(chart).comms).toHaveLength(0)
+  })
+})

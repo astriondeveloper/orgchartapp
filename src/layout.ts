@@ -48,6 +48,8 @@ export interface Zone {
 export interface CommPath {
   link: CommLink
   path: string
+  /** Midpoint between the two connected boxes, for an optional edge label. */
+  labelPos: { x: number; y: number }
 }
 
 export interface LegendLayout {
@@ -418,7 +420,13 @@ export function layoutChart(chart: OrgChart): Layout {
   for (const link of chart.comms) {
     const a = boxOf(placed, link.fromId)
     const b = boxOf(placed, link.toId)
-    if (a && b) comms.push({ link, path: routeComm(a, b) })
+    if (a && b) {
+      const labelPos = {
+        x: (a.x + a.w / 2 + b.x + b.w / 2) / 2,
+        y: (a.y + a.h / 2 + b.y + b.h / 2) / 2,
+      }
+      comms.push({ link, path: routeComm(a, b), labelPos })
+    }
   }
 
   // Content bounds.

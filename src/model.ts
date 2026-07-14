@@ -56,11 +56,41 @@ export interface Group {
   memberIds: string[]
 }
 
+export type EdgeStyle = 'solid' | 'dashed'
+/** Which ends carry an arrowhead. */
+export type EdgeArrow = 'none' | 'start' | 'end' | 'both'
+
 export interface CommLink {
   id: string
   fromId: string
   toId: string
+  /** @deprecated superseded by `arrow`; still read from older files. */
   twoWay?: boolean
+  style?: EdgeStyle
+  arrow?: EdgeArrow
+  label?: string
+}
+
+/** Resolve an edge's arrowheads, honoring the legacy `twoWay` flag. */
+export function edgeArrow(e: CommLink): EdgeArrow {
+  if (e.arrow === 'none' || e.arrow === 'start' || e.arrow === 'end' || e.arrow === 'both') {
+    return e.arrow
+  }
+  return e.twoWay === false ? 'end' : 'both'
+}
+
+/** Normalize an edge to the current shape: migrate `twoWay` to `arrow`,
+ *  validate `style`, and keep a non-empty label. */
+function normalizeEdge(e: CommLink): CommLink {
+  const out: CommLink = {
+    id: e.id,
+    fromId: e.fromId,
+    toId: e.toId,
+    arrow: edgeArrow(e),
+    style: e.style === 'dashed' ? 'dashed' : 'solid',
+  }
+  if (typeof e.label === 'string' && e.label.trim()) out.label = e.label
+  return out
 }
 
 export interface LegendItem {
@@ -288,7 +318,7 @@ export function normalizeChart(input: unknown): OrgChart {
     },
     roots: c.roots as OrgNode[],
     groups: Array.isArray(c.groups) ? c.groups : [],
-    comms: Array.isArray(c.comms) ? c.comms : [],
+    comms: Array.isArray(c.comms) ? c.comms.map(normalizeEdge) : [],
     legend: Array.isArray(c.legend) ? c.legend : [],
   }
   return sanitizeColors(chart)
