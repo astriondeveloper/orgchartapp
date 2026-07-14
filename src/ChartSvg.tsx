@@ -1,7 +1,7 @@
 import type { JSX } from 'react'
 import type { Layout, PlacedNode } from './layout'
 import type { BadgeType, LegendMarker } from './model'
-import { brand, metrics as M, variantFill, zoneFill } from './theme'
+import { brand, metrics as M, readableText, variantFill, zoneFill } from './theme'
 
 /*
  * Pure SVG renderer. Everything is drawn with inline attributes (no CSS
@@ -64,7 +64,9 @@ function PhotoPlaceholder({ x, y }: { x: number; y: number }) {
 }
 
 function NodeBox({ p, selected, onSelect }: { p: PlacedNode; selected: boolean; onSelect?: (id: string) => void }) {
-  const v = variantFill[p.node.variant] ?? variantFill.secondary
+  const v = p.node.color
+    ? { fill: p.node.color, text: readableText(p.node.color) }
+    : (variantFill[p.node.variant] ?? variantFill.secondary)
   const padX = M.padX
   const photo = p.node.photo
   const contentX = p.x + padX + (photo ? 38 : 0)

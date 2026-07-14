@@ -76,6 +76,23 @@ export const variantFill: Record<string, { fill: string; text: string }> = {
   accent: { fill: palette.supernova, text: palette.midnight },
 }
 
+/**
+ * Pick a readable text color (white or Midnight) for an arbitrary fill, using
+ * WCAG relative luminance. The 0.5 threshold reproduces the variant choices
+ * above (Force/Sky → white, Daylight/Supernova → Midnight).
+ */
+export function readableText(hex: string): string {
+  const c = hex.replace('#', '')
+  const full = c.length === 3 ? c.split('').map((x) => x + x).join('') : c
+  if (full.length < 6) return brand.white
+  const chan = (i: number) => {
+    const v = parseInt(full.slice(i, i + 2), 16) / 255
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
+  }
+  const lum = 0.2126 * chan(0) + 0.7152 * chan(2) + 0.0722 * chan(4)
+  return lum > 0.5 ? palette.midnight : brand.white
+}
+
 /** Layout metrics — tuned once so every chart uses identical geometry. */
 export const metrics = {
   boxWidth: 190, // default node width

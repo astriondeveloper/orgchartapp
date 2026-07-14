@@ -38,6 +38,9 @@ export interface OrgNode {
   details?: DetailRow[]
   badges?: BadgeType[]
   variant: Variant
+  /** Optional fill override (hex). Wins over the variant color; text color is
+   *  picked automatically for contrast. Clear it to fall back to the variant. */
+  color?: string
   /** Optional width override in px (default from theme metrics). */
   width?: number
   /** How this node's children are arranged. */

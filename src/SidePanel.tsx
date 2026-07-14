@@ -18,7 +18,7 @@ import {
   uid,
   updateNode,
 } from './model'
-import { palette } from './theme'
+import { palette, variantFill } from './theme'
 import type { ZoneStyle } from './theme'
 
 interface Props {
@@ -64,6 +64,19 @@ const ZONE_STYLES: { value: ZoneStyle; label: string }[] = [
   { value: 'dashed', label: 'Dashed container' },
 ]
 
+/** Brand-palette quick picks for the per-box color override. */
+const COLOR_SWATCHES: { label: string; color: string }[] = [
+  { label: 'Force', color: palette.force },
+  { label: 'Sky', color: palette.sky },
+  { label: 'Refraction', color: palette.refraction },
+  { label: 'Daylight', color: palette.daylight },
+  { label: 'Zenith', color: palette.zenith },
+  { label: 'Midnight', color: palette.midnight },
+  { label: 'Supernova', color: palette.supernova },
+  { label: 'Twilight', color: palette.twilight },
+  { label: 'Water', color: palette.water },
+]
+
 function NodeTree({ chart, selectedId, onSelect }: Omit<Props, 'onChange'>) {
   const rows = allNodes(chart)
   const treeRef = useRef<HTMLDivElement>(null)
@@ -85,7 +98,10 @@ function NodeTree({ chart, selectedId, onSelect }: Omit<Props, 'onChange'>) {
           style={{ paddingLeft: 8 + depth * 14 }}
           onClick={() => onSelect(node.id)}
         >
-          <span className={`dot dot-${node.variant}`} />
+          <span
+            className={`dot dot-${node.variant}`}
+            style={node.color ? { background: node.color, border: 'none' } : undefined}
+          />
           <span className="tree-title">{node.title || '(untitled)'}</span>
         </button>
       ))}
@@ -132,6 +148,38 @@ function NodeEditor({ chart, onChange, selectedId, onSelect }: Props) {
           </select>
         </label>
       </div>
+      <fieldset>
+        <legend>Box color</legend>
+        <div className="swatches">
+          {COLOR_SWATCHES.map(({ label, color }) => (
+            <button
+              key={color}
+              type="button"
+              title={label}
+              className={`swatch-btn${node.color === color ? ' active' : ''}`}
+              style={{ background: color }}
+              onClick={() => patch({ color })}
+            />
+          ))}
+        </div>
+        <div className="two-col">
+          <label>Custom color
+            <input
+              type="color"
+              value={node.color ?? variantFill[node.variant]?.fill ?? palette.sky}
+              onChange={(e) => patch({ color: e.target.value })}
+            />
+          </label>
+          <button className="sm" disabled={!node.color} onClick={() => patch({ color: undefined })}>
+            Use style color
+          </button>
+        </div>
+        <p className="hint">
+          Overrides the Style color for this box; the text color adjusts automatically for contrast.
+          Clear it to fall back to the brand Style color.
+        </p>
+      </fieldset>
+
       <div className="two-col">
         <label>Width (px, blank = auto)
           <input
