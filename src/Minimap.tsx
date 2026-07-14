@@ -54,7 +54,19 @@ export function Minimap({ layout, viewport, onNavigate }: Props) {
         }}
         onPointerUp={(e) => {
           dragging.current = false
-          e.currentTarget.releasePointerCapture(e.pointerId)
+          try {
+            e.currentTarget.releasePointerCapture(e.pointerId)
+          } catch {
+            /* capture may already be released */
+          }
+        }}
+        onPointerCancel={(e) => {
+          dragging.current = false
+          try {
+            e.currentTarget.releasePointerCapture(e.pointerId)
+          } catch {
+            /* ignore */
+          }
         }}
       >
         {layout.placed.map((p) => (

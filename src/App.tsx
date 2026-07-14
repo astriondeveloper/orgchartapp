@@ -83,6 +83,8 @@ export default function App() {
   const panRef = useRef<{ x: number; y: number; sl: number; st: number; moved: boolean } | null>(null)
   const skipClickRef = useRef(false)
   const lastSelRef = useRef<string | null>(null)
+  const zoomRef = useRef(zoom)
+  zoomRef.current = zoom
 
   const toggleTheme = useCallback(() => {
     setTheme((t) => {
@@ -276,24 +278,27 @@ export default function App() {
 
   // Ctrl/Cmd + wheel (and trackpad pinch) zooms toward the cursor. The point
   // under the pointer is stashed and re-pinned after the zoom re-renders.
-  const applyWheelZoom = useCallback(
-    (e: WheelEvent) => {
-      if (!(e.ctrlKey || e.metaKey)) return
-      const canvas = canvasRef.current
-      if (!canvas) return
-      e.preventDefault()
-      const rect = canvas.getBoundingClientRect()
-      const offX = e.clientX - rect.left
-      const offY = e.clientY - rect.top
-      const svgX = (canvas.scrollLeft + offX - CANVAS_PAD) / zoom
-      const svgY = (canvas.scrollTop + offY - CANVAS_PAD) / zoom
-      const z2 = +clamp(zoom * Math.exp(-e.deltaY * 0.0015), ZOOM_MIN, ZOOM_MAX).toFixed(3)
-      if (z2 === zoom) return
-      pendingZoomRef.current = { svgX, svgY, offX, offY }
-      setZoom(z2)
-    },
-    [zoom],
-  )
+  // Reads zoom from a ref and is stable ([] deps) so the native wheel listener
+  // subscribes once and always sees the current zoom + scroll (no drift).
+  const applyWheelZoom = useCallback((e: WheelEvent) => {
+    if (!(e.ctrlKey || e.metaKey)) return
+    const canvas = canvasRef.current
+    if (!canvas) return
+    e.preventDefault()
+    const z = zoomRef.current
+    const rect = canvas.getBoundingClientRect()
+    const offX = e.clientX - rect.left
+    const offY = e.clientY - rect.top
+    const svgX = (canvas.scrollLeft + offX - CANVAS_PAD) / z
+    const svgY = (canvas.scrollTop + offY - CANVAS_PAD) / z
+    // Normalize wheel delta across devices/browsers (Firefox reports lines).
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? canvas.clientHeight : 1
+    const z2 = +clamp(z * Math.exp(-e.deltaY * unit * 0.0015), ZOOM_MIN, ZOOM_MAX).toFixed(3)
+    if (z2 === z) return
+    pendingZoomRef.current = { svgX, svgY, offX, offY }
+    zoomRef.current = z2
+    setZoom(z2)
+  }, [])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -408,23 +413,35 @@ export default function App() {
     reader.readAsText(file)
   }
 
-  // Hold Space to pan (grab cursor); ignore while typing in a field.
+  // Hold Space to pan (grab cursor). Bail on form fields and activatable
+  // controls so Space still types and still clicks focused buttons/links.
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      if (e.code !== 'Space') return
+      if (e.code !== 'Space' || e.repeat) return
       const t = e.target as HTMLElement
-      if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT') return
+      const tag = t.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || tag === 'A' || t.isContentEditable) return
       e.preventDefault()
       setSpaceHeld(true)
     }
     const up = (e: KeyboardEvent) => {
       if (e.code === 'Space') setSpaceHeld(false)
     }
+    // Never let held-key/pan state survive a focus loss.
+    const reset = () => {
+      setSpaceHeld(false)
+      setPanning(false)
+      panRef.current = null
+    }
     window.addEventListener('keydown', down)
     window.addEventListener('keyup', up)
+    window.addEventListener('blur', reset)
+    document.addEventListener('visibilitychange', reset)
     return () => {
       window.removeEventListener('keydown', down)
       window.removeEventListener('keyup', up)
+      window.removeEventListener('blur', reset)
+      document.removeEventListener('visibilitychange', reset)
     }
   }, [])
 
@@ -448,12 +465,17 @@ export default function App() {
     canvas.scrollLeft = pan.sl - dx
     canvas.scrollTop = pan.st - dy
   }
-  const onCanvasPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+  const endPan = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!panRef.current) return
-    if (panRef.current.moved) skipClickRef.current = true
+    // Only the primary button produces a follow-up click to suppress.
+    if (panRef.current.moved && e.button === 0) skipClickRef.current = true
     panRef.current = null
     setPanning(false)
-    canvasRef.current?.releasePointerCapture(e.pointerId)
+    try {
+      canvasRef.current?.releasePointerCapture(e.pointerId)
+    } catch {
+      /* capture may already be gone on cancel */
+    }
   }
 
   // Scroll the canvas so an SVG point (from a minimap click) is centered.
@@ -584,9 +606,14 @@ export default function App() {
             ref={canvasRef}
             tabIndex={-1}
             onScroll={scheduleReposition}
+            onMouseDown={(e) => {
+              // Suppress the middle-button autoscroll puck.
+              if (e.button === 1) e.preventDefault()
+            }}
             onPointerDown={onCanvasPointerDown}
             onPointerMove={onCanvasPointerMove}
-            onPointerUp={onCanvasPointerUp}
+            onPointerUp={endPan}
+            onPointerCancel={endPan}
             onClick={() => {
               if (skipClickRef.current) {
                 skipClickRef.current = false
