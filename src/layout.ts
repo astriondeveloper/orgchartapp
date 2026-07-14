@@ -608,8 +608,158 @@ function layoutRadial(chart: OrgChart): Layout {
   return assemble(chart, placed, connectors)
 }
 
+/* ------------------------------------------------------------- layered */
+
+const LAYERED_SWEEPS = 6
+
+/** Sugiyama-lite layered layout. Every node is ranked into a depth-aligned row;
+ *  barycenter passes center parents over their children (and pull cross-linked
+ *  nodes together), so global peers line up and dotted-line relationships read
+ *  clearly. Comms are drawn as the cross-layer edges by assemble(). */
+function layoutLayered(chart: OrgChart): Layout {
+  // Nearest visible ancestor (hidden containers are bridged).
+  const parentOf = new Map<string, OrgNode | null>()
+  visit(chart.roots, (n, p) => parentOf.set(n.id, p))
+  const visParent = (n: OrgNode): OrgNode | null => {
+    let a = parentOf.get(n.id) ?? null
+    while (a && a.variant === 'hidden') a = parentOf.get(a.id) ?? null
+    return a
+  }
+
+  // Visible nodes (DFS order) and their box measurements.
+  const measured = new Map<string, Measured>()
+  for (const r of chart.roots) {
+    const stack: Measured[] = [measureNode(r, true)]
+    while (stack.length) {
+      const x = stack.pop()!
+      measured.set(x.node.id, x)
+      for (let i = x.children.length - 1; i >= 0; i--) stack.push(x.children[i])
+    }
+  }
+  const nodes: OrgNode[] = []
+  visit(chart.roots, (n) => {
+    if (n.variant !== 'hidden') nodes.push(n)
+  })
+  const idset = new Set(nodes.map((n) => n.id))
+  if (!nodes.length) return assemble(chart, [], [])
+
+  // Layer = tree depth via the nearest visible ancestor (acyclic, so no cycles).
+  const layer = new Map<string, number>()
+  const layerOf = (n: OrgNode): number => {
+    const cached = layer.get(n.id)
+    if (cached !== undefined) return cached
+    const p = visParent(n)
+    const L = p && idset.has(p.id) ? layerOf(p) + 1 : 0
+    layer.set(n.id, L)
+    return L
+  }
+  for (const n of nodes) layerOf(n)
+
+  // Undirected adjacency for barycenter: hierarchy edges + comm cross-links.
+  const adj = new Map<string, string[]>()
+  for (const n of nodes) adj.set(n.id, [])
+  const link = (a: string, b: string) => {
+    adj.get(a)!.push(b)
+    adj.get(b)!.push(a)
+  }
+  for (const n of nodes) {
+    const p = visParent(n)
+    if (p && idset.has(p.id)) link(p.id, n.id)
+  }
+  for (const c of chart.comms) {
+    if (idset.has(c.fromId) && idset.has(c.toId) && c.fromId !== c.toId) link(c.fromId, c.toId)
+  }
+
+  // Rows by layer, initial order = DFS order.
+  const maxLayer = Math.max(...nodes.map((n) => layer.get(n.id)!))
+  const rows: string[][] = Array.from({ length: maxLayer + 1 }, () => [])
+  for (const n of nodes) rows[layer.get(n.id)!].push(n.id)
+
+  // Row Y offsets (each row is as tall as its tallest box).
+  const ox = M.canvasPad
+  const oy = M.canvasPad + (chart.meta.showTitle && chart.meta.title.trim() ? 44 : 0)
+  const rowY: number[] = []
+  let yCursor = 0
+  for (let L = 0; L <= maxLayer; L++) {
+    rowY[L] = yCursor
+    yCursor += Math.max(0, ...rows[L].map((id) => measured.get(id)!.totalH)) + M.levelGap
+  }
+
+  // Center-x per node: pack each row, then barycenter passes align the layers.
+  const cx = new Map<string, number>()
+  for (const row of rows) {
+    let x = 0
+    for (const id of row) {
+      const w = measured.get(id)!.w
+      cx.set(id, x + w / 2)
+      x += w + M.siblingGap
+    }
+  }
+  const resolveRow = (row: string[]) => {
+    // Left-to-right, then right-to-left, so a barycenter target keeps min gaps
+    // without dragging the whole row one way.
+    for (let i = 1; i < row.length; i++) {
+      const a = row[i - 1]
+      const b = row[i]
+      const min = cx.get(a)! + measured.get(a)!.w / 2 + M.siblingGap + measured.get(b)!.w / 2
+      if (cx.get(b)! < min) cx.set(b, min)
+    }
+    for (let i = row.length - 2; i >= 0; i--) {
+      const a = row[i]
+      const b = row[i + 1]
+      const max = cx.get(b)! - measured.get(b)!.w / 2 - M.siblingGap - measured.get(a)!.w / 2
+      if (cx.get(a)! > max) cx.set(a, max)
+    }
+  }
+  for (let sweep = 0; sweep < LAYERED_SWEEPS; sweep++) {
+    for (const row of rows) {
+      for (const id of row) {
+        const ns = adj.get(id)!
+        if (ns.length) cx.set(id, ns.reduce((s, k) => s + cx.get(k)!, 0) / ns.length)
+      }
+      resolveRow(row)
+    }
+  }
+
+  // Shift so the leftmost box edge sits at ox.
+  let minX = Infinity
+  for (const n of nodes) minX = Math.min(minX, cx.get(n.id)! - measured.get(n.id)!.w / 2)
+  const shiftX = ox - minX
+
+  const placed: PlacedNode[] = nodes.map((n) => {
+    const m = measured.get(n.id)!
+    const auto = { x: cx.get(n.id)! - m.w / 2 + shiftX, y: rowY[layer.get(n.id)!] + oy }
+    const p = n.pos ?? auto
+    return {
+      node: n,
+      x: p.x,
+      y: p.y,
+      w: m.w,
+      headerH: m.headerH,
+      totalH: m.totalH,
+      titleLines: m.titleLines,
+      leftAlign: m.leftAlign,
+      bulletLines: m.bulletLines,
+      detailBlocks: m.detailBlocks,
+    }
+  })
+
+  // Hierarchy connectors (comms are drawn as cross-edges by assemble()).
+  const connectors: string[] = []
+  for (const n of nodes) {
+    const p = visParent(n)
+    if (!p || !idset.has(p.id)) continue
+    const a = boxOf(placed, p.id)
+    const b = boxOf(placed, n.id)
+    if (a && b) connectors.push(routeComm(a, b))
+  }
+
+  return assemble(chart, placed, connectors)
+}
+
 export function layoutChart(chart: OrgChart): Layout {
   if ((chart.meta.layout ?? 'tree') === 'radial') return layoutRadial(chart)
+  if ((chart.meta.layout ?? 'tree') === 'layered') return layoutLayered(chart)
 
   const dir: Direction = chart.meta.direction ?? 'TB'
   const vertical = dir === 'TB' || dir === 'BT'

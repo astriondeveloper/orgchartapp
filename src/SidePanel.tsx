@@ -68,6 +68,7 @@ const MARKERS: { value: LegendMarker; label: string }[] = [
 const LAYOUT_MODES: { value: LayoutMode; label: string }[] = [
   { value: 'tree', label: 'Tree (hierarchy)' },
   { value: 'radial', label: 'Radial (rings)' },
+  { value: 'layered', label: 'Layered (ranked rows)' },
 ]
 
 const DIRECTIONS: { value: Direction; label: string }[] = [
@@ -319,7 +320,7 @@ function ChartEditor({ chart, onChange, onSelect }: Props) {
       <label>Flow direction
         <select
           value={chart.meta.direction ?? 'TB'}
-          disabled={(chart.meta.layout ?? 'tree') === 'radial'}
+          disabled={(chart.meta.layout ?? 'tree') !== 'tree'}
           onChange={(e) => onChange({ ...chart, meta: { ...chart.meta, direction: e.target.value as Direction } })}
         >
           {DIRECTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}

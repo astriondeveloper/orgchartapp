@@ -221,6 +221,59 @@ describe('manual position overrides', () => {
   })
 })
 
+describe('layered layout', () => {
+  const layered = (comms: OrgChart['comms'] = []): OrgChart => ({
+    version: 1,
+    meta: { title: 'L', showTitle: true, layout: 'layered' },
+    roots: [
+      {
+        id: 'root',
+        title: 'Root',
+        variant: 'primary',
+        children: [
+          { id: 'a', title: 'A', variant: 'secondary', children: [{ id: 'a1', title: 'A1', variant: 'tertiary' }] },
+          { id: 'b', title: 'B', variant: 'secondary', children: [{ id: 'b1', title: 'B1', variant: 'tertiary' }] },
+        ],
+      },
+    ],
+    groups: [],
+    comms,
+    legend: [],
+  })
+
+  it('ranks nodes into depth-aligned rows', () => {
+    const l = layoutChart(layered())
+    const y = (id: string) => l.placed.find((p) => p.node.id === id)!.y
+    // Same depth => same row (identical y); deeper => strictly lower.
+    expect(y('a')).toBe(y('b'))
+    expect(y('a1')).toBe(y('b1'))
+    expect(y('root')).toBeLessThan(y('a'))
+    expect(y('a')).toBeLessThan(y('a1'))
+    expect(l.placed).toHaveLength(5)
+    expect(l.connectors.length).toBeGreaterThan(0)
+    expect(l.width).toBeGreaterThan(0)
+    expect(l.height).toBeGreaterThan(0)
+  })
+
+  it('centers a parent over its children', () => {
+    const l = layoutChart(layered())
+    const mid = (id: string) => {
+      const p = l.placed.find((n) => n.node.id === id)!
+      return p.x + p.w / 2
+    }
+    // Root sits between its two subtrees; A above A1, B above B1.
+    expect(mid('root')).toBeGreaterThan(mid('a') - 1)
+    expect(mid('root')).toBeLessThan(mid('b') + 1)
+    expect(Math.abs(mid('a') - mid('a1'))).toBeLessThan(2)
+  })
+
+  it('stays finite with a cross-link comm', () => {
+    const l = layoutChart(layered([{ id: 'e', fromId: 'a1', toId: 'b1', arrow: 'end', style: 'solid' }]))
+    expect(l.placed.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))).toBe(true)
+    expect(l.comms).toHaveLength(1)
+  })
+})
+
 describe('radial layout', () => {
   const radial = (): OrgChart => ({
     version: 1,
