@@ -15,7 +15,7 @@ import {
   deleteNode,
   findNode,
   moveNode,
-  sanitizeColors,
+  normalizeChart,
   uid,
   updateNode,
 } from './model'
@@ -450,14 +450,8 @@ function JsonEditor({ chart, onChange }: Pick<Props, 'chart' | 'onChange'>) {
         <button
           onClick={() => {
             try {
-              const parsed = JSON.parse(text) as OrgChart
-              if (!parsed.roots || !Array.isArray(parsed.roots)) throw new Error('Missing "roots" array')
-              parsed.groups ??= []
-              parsed.comms ??= []
-              parsed.legend ??= []
-              parsed.meta ??= { title: 'Org Chart', showTitle: true }
-              // Enforce brand-only box colors even for hand-edited JSON.
-              onChange(sanitizeColors(parsed))
+              // Validates, fills defaults, and enforces brand-only colors.
+              onChange(normalizeChart(JSON.parse(text)))
               setError(null)
             } catch (e) {
               setError(e instanceof Error ? e.message : 'Invalid JSON')
