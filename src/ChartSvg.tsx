@@ -1,4 +1,4 @@
-import type { JSX } from 'react'
+import type { JSX, PointerEvent as ReactPointerEvent } from 'react'
 import { textWidth } from './layout'
 import type { Layout, PlacedNode } from './layout'
 import { edgeArrow } from './model'
@@ -15,6 +15,8 @@ interface Props {
   layout: Layout
   selectedId?: string | null
   onSelect?: (id: string) => void
+  /** Begin a drag-to-reposition gesture on a box. */
+  onNodePointerDown?: (id: string, e: ReactPointerEvent) => void
 }
 
 function KeyIcon({ x, y, color }: { x: number; y: number; color: string }) {
@@ -65,7 +67,17 @@ function PhotoPlaceholder({ x, y }: { x: number; y: number }) {
   )
 }
 
-function NodeBox({ p, selected, onSelect }: { p: PlacedNode; selected: boolean; onSelect?: (id: string) => void }) {
+function NodeBox({
+  p,
+  selected,
+  onSelect,
+  onPointerDown,
+}: {
+  p: PlacedNode
+  selected: boolean
+  onSelect?: (id: string) => void
+  onPointerDown?: (id: string, e: ReactPointerEvent) => void
+}) {
   const v = p.node.color
     ? { fill: p.node.color, text: readableText(p.node.color) }
     : (variantFill[p.node.variant] ?? variantFill.secondary)
@@ -194,8 +206,9 @@ function NodeBox({ p, selected, onSelect }: { p: PlacedNode; selected: boolean; 
 
   return (
     <g
+      onPointerDown={onPointerDown ? (e) => onPointerDown(p.node.id, e) : undefined}
       onClick={onSelect ? (e) => { e.stopPropagation(); onSelect(p.node.id) } : undefined}
-      style={onSelect ? { cursor: 'pointer' } : undefined}
+      style={onSelect ? { cursor: onPointerDown ? 'move' : 'pointer' } : undefined}
     >
       <rect
         x={p.x}
@@ -266,7 +279,7 @@ function LegendMarkerGlyph({ marker, x, y }: { marker: LegendMarker; x: number; 
   }
 }
 
-export function ChartSvg({ layout, selectedId, onSelect }: Props) {
+export function ChartSvg({ layout, selectedId, onSelect, onNodePointerDown }: Props) {
   const { placed, connectors, zones, comms, legend, title, width, height } = layout
   return (
     <svg
@@ -395,7 +408,13 @@ export function ChartSvg({ layout, selectedId, onSelect }: Props) {
       })}
 
       {placed.map((p) => (
-        <NodeBox key={p.node.id} p={p} selected={p.node.id === selectedId} onSelect={onSelect} />
+        <NodeBox
+          key={p.node.id}
+          p={p}
+          selected={p.node.id === selectedId}
+          onSelect={onSelect}
+          onPointerDown={onNodePointerDown}
+        />
       ))}
 
       {legend && (

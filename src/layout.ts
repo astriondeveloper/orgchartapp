@@ -1,4 +1,5 @@
 import type { CommLink, Direction, Group, LegendItem, OrgChart, OrgNode } from './model'
+import { visit } from './model'
 import { metrics as M } from './theme'
 
 /*
@@ -425,6 +426,43 @@ function assemble(chart: OrgChart, placed: PlacedNode[], connectors: string[]): 
   return { placed, connectors, zones, comms, legend, title, width, height }
 }
 
+/* --------------------------------------------------- manual overrides */
+
+/** Move any box that carries a manual `pos` to that position. Returns true if
+ *  at least one box moved, so the caller knows connectors must be re-routed. */
+function applyOverrides(placed: PlacedNode[]): boolean {
+  let moved = false
+  for (const p of placed) {
+    if (p.node.pos) {
+      p.x = p.node.pos.x
+      p.y = p.node.pos.y
+      moved = true
+    }
+  }
+  return moved
+}
+
+/** Re-route parent→child connectors from the final box geometry. The tidy-tree
+ *  bus routing assumes auto positions, so once any box is manually moved every
+ *  connector is redrawn as an orthogonal elbow that follows its boxes. Hidden
+ *  containers draw no line, so their descendants connect to the nearest visible
+ *  ancestor instead. */
+function overrideConnectors(chart: OrgChart, placed: PlacedNode[]): string[] {
+  const parentOf = new Map<string, OrgNode | null>()
+  visit(chart.roots, (n, parent) => parentOf.set(n.id, parent))
+  const out: string[] = []
+  visit(chart.roots, (n) => {
+    if (n.variant === 'hidden') return
+    let anc = parentOf.get(n.id) ?? null
+    while (anc && anc.variant === 'hidden') anc = parentOf.get(anc.id) ?? null
+    if (!anc) return
+    const a = boxOf(placed, anc.id)
+    const b = boxOf(placed, n.id)
+    if (a && b) out.push(routeComm(a, b))
+  })
+  return out
+}
+
 /* ------------------------------------------------------------- radial */
 
 /** Clearance (px) kept between adjacent radial boxes, radially and angularly. */
@@ -528,12 +566,22 @@ function layoutRadial(chart: OrgChart): Layout {
     const shiftX = ox + clusterLeft - minCx
     const shiftY = oy - minCy
 
+    // Final top-left of each node: its manual override wins over the auto ring
+    // position. Center points are derived from that, so spokes follow moves.
+    const topLeft = new Map<RadialPlaced, { x: number; y: number }>()
     for (const n of nodes) {
+      topLeft.set(
+        n,
+        n.m.node.pos ?? { x: n.cx - n.m.w / 2 + shiftX, y: n.cy - n.m.totalH / 2 + shiftY },
+      )
+    }
+    for (const n of nodes) {
+      const tl = topLeft.get(n)!
       if (n.m.node.variant !== 'hidden') {
         placed.push({
           node: n.m.node,
-          x: n.cx - n.m.w / 2 + shiftX,
-          y: n.cy - n.m.totalH / 2 + shiftY,
+          x: tl.x,
+          y: tl.y,
           w: n.m.w,
           headerH: n.m.headerH,
           totalH: n.m.totalH,
@@ -546,9 +594,10 @@ function layoutRadial(chart: OrgChart): Layout {
       // Straight spoke from parent center to this node center (hidden under the
       // opaque boxes, so only the gap between them shows).
       if (n.parent && n.parent.m.node.variant !== 'hidden' && n.m.node.variant !== 'hidden') {
-        connectors.push(
-          `M ${n.parent.cx + shiftX} ${n.parent.cy + shiftY} L ${n.cx + shiftX} ${n.cy + shiftY}`,
-        )
+        const pt = topLeft.get(n.parent)!
+        const pcx = pt.x + n.parent.m.w / 2
+        const pcy = pt.y + n.parent.m.totalH / 2
+        connectors.push(`M ${pcx} ${pcy} L ${tl.x + n.m.w / 2} ${tl.y + n.m.totalH / 2}`)
       }
     }
 
@@ -610,5 +659,8 @@ export function layoutChart(chart: OrgChart): Layout {
       .join(' '),
   )
 
-  return assemble(chart, placed, connectors)
+  // Manual position overrides win over the auto layout; when present, connectors
+  // are re-routed to follow the moved boxes.
+  const moved = applyOverrides(placed)
+  return assemble(chart, placed, moved ? overrideConnectors(chart, placed) : connectors)
 }

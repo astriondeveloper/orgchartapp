@@ -44,6 +44,9 @@ export interface OrgNode {
   color?: string
   /** Optional width override in px (default from theme metrics). */
   width?: number
+  /** Manual position override (top-left, in the layout's screen coordinates).
+   *  Set by dragging the box on the canvas; clearing it restores auto-layout. */
+  pos?: { x: number; y: number }
   /** How this node's children are arranged. */
   childLayout?: 'row' | 'stack'
   children?: OrgNode[]
@@ -179,6 +182,19 @@ export function sanitizeColors(chart: OrgChart): OrgChart {
   return chart
 }
 
+/**
+ * Drop any malformed manual position (missing or non-finite coordinates) from
+ * an untrusted chart, so the layout engine never receives NaN geometry from a
+ * hand-edited JSON tab or an imported file. Mutates and returns the chart.
+ */
+export function sanitizePositions(chart: OrgChart): OrgChart {
+  visit(chart.roots, (n) => {
+    const p = n.pos
+    if (p && !(Number.isFinite(p.x) && Number.isFinite(p.y))) delete n.pos
+  })
+  return chart
+}
+
 export function findNode(chart: OrgChart, id: string): OrgNode | null {
   let found: OrgNode | null = null
   visit(chart.roots, (n) => {
@@ -266,6 +282,21 @@ export function deleteNode(chart: OrgChart, id: string): OrgChart {
   return next
 }
 
+/** Set or clear a node's manual position override (top-left in layout coords). */
+export function setNodePos(
+  chart: OrgChart,
+  id: string,
+  pos: { x: number; y: number } | null,
+): OrgChart {
+  const next = clone(chart)
+  const n = findNode(next, id)
+  if (n) {
+    if (pos) n.pos = { x: pos.x, y: pos.y }
+    else delete n.pos
+  }
+  return next
+}
+
 export function moveNode(chart: OrgChart, id: string, dir: -1 | 1): OrgChart {
   const next = clone(chart)
   const loc = findContainer(next, id)
@@ -328,5 +359,5 @@ export function normalizeChart(input: unknown): OrgChart {
     comms: Array.isArray(c.comms) ? c.comms.map(normalizeEdge) : [],
     legend: Array.isArray(c.legend) ? c.legend : [],
   }
-  return sanitizeColors(chart)
+  return sanitizePositions(sanitizeColors(chart))
 }

@@ -10,6 +10,7 @@ import {
   findNode,
   normalizeChart,
   sanitizeColors,
+  setNodePos,
   uid,
 } from './model'
 import type { OrgChart } from './model'
@@ -115,7 +116,33 @@ describe('sanitizeColors', () => {
   })
 })
 
+describe('setNodePos', () => {
+  it('sets and clears a manual position without touching other nodes', () => {
+    const base = emptyChart()
+    const id = base.roots[0].id
+    const moved = setNodePos(base, id, { x: 120, y: 40 })
+    expect(findNode(moved, id)?.pos).toEqual({ x: 120, y: 40 })
+    const cleared = setNodePos(moved, id, null)
+    expect(findNode(cleared, id)?.pos).toBeUndefined()
+    // Original chart is never mutated.
+    expect(findNode(base, id)?.pos).toBeUndefined()
+  })
+})
+
 describe('normalizeChart', () => {
+  it('drops a manual position with non-finite coordinates', () => {
+    const chart = normalizeChart({
+      roots: [
+        { id: 'a', title: 'A', variant: 'primary', pos: { x: 10, y: 20 } },
+        { id: 'b', title: 'B', variant: 'primary', pos: { x: Number.NaN, y: 5 } },
+        { id: 'c', title: 'C', variant: 'primary', pos: { x: 5 } },
+      ],
+    })
+    expect(findNode(chart, 'a')?.pos).toEqual({ x: 10, y: 20 })
+    expect(findNode(chart, 'b')?.pos).toBeUndefined()
+    expect(findNode(chart, 'c')?.pos).toBeUndefined()
+  })
+
   it('throws on non-objects and missing roots', () => {
     expect(() => normalizeChart(null)).toThrow()
     expect(() => normalizeChart({})).toThrow()

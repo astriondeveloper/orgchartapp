@@ -22,6 +22,7 @@ import {
   findNode,
   moveNode,
   normalizeChart,
+  setNodePos,
   uid,
   updateNode,
 } from './model'
@@ -213,6 +214,15 @@ function NodeEditor({ chart, onChange, selectedId, onSelect }: Props) {
           Photo placeholder
         </label>
       </div>
+
+      {node.pos && (
+        <div className="btn-row">
+          <button className="sm" onClick={() => onChange(setNodePos(chart, node.id, null))}>
+            ⤺ Reset to auto position
+          </button>
+          <span className="hint">Manually placed. Drag boxes on the canvas to reposition.</span>
+        </div>
+      )}
 
       <fieldset>
         <legend>Badges</legend>

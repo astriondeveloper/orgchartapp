@@ -150,6 +150,77 @@ describe('edges', () => {
   })
 })
 
+describe('manual position overrides', () => {
+  const chartWith = (pos?: { x: number; y: number }): OrgChart => ({
+    version: 1,
+    meta: { title: 'P', showTitle: true },
+    roots: [
+      {
+        id: 'root',
+        title: 'Root',
+        variant: 'primary',
+        children: [
+          { id: 'a', title: 'Alpha', variant: 'secondary', ...(pos ? { pos } : {}) },
+          { id: 'b', title: 'Bravo', variant: 'secondary' },
+        ],
+      },
+    ],
+    groups: [],
+    comms: [],
+    legend: [],
+  })
+
+  it('places an overridden box at its manual position', () => {
+    const l = layoutChart(chartWith({ x: 600, y: 500 }))
+    const a = l.placed.find((p) => p.node.id === 'a')!
+    expect(a.x).toBe(600)
+    expect(a.y).toBe(500)
+    // The un-moved sibling keeps its auto position.
+    const auto = layoutChart(chartWith()).placed.find((p) => p.node.id === 'b')!
+    const b = l.placed.find((p) => p.node.id === 'b')!
+    expect(b.x).toBe(auto.x)
+    expect(b.y).toBe(auto.y)
+  })
+
+  it('re-routes connectors to follow a moved box and grows the canvas', () => {
+    const base = layoutChart(chartWith())
+    const moved = layoutChart(chartWith({ x: 900, y: 700 }))
+    // Every connector is still a valid path.
+    expect(moved.connectors.every((d) => d.startsWith('M'))).toBe(true)
+    expect(moved.connectors.length).toBeGreaterThan(0)
+    // The canvas expands to include the box dragged down-right.
+    expect(moved.width).toBeGreaterThan(base.width)
+    expect(moved.height).toBeGreaterThan(base.height)
+  })
+
+  it('honors an override in radial mode and keeps the spokes valid', () => {
+    const radialMoved: OrgChart = {
+      version: 1,
+      meta: { title: 'P', showTitle: true, layout: 'radial' },
+      roots: [
+        {
+          id: 'root',
+          title: 'Root',
+          variant: 'primary',
+          children: [
+            { id: 'a', title: 'Alpha', variant: 'secondary', pos: { x: 800, y: 600 } },
+            { id: 'b', title: 'Bravo', variant: 'secondary' },
+          ],
+        },
+      ],
+      groups: [],
+      comms: [],
+      legend: [],
+    }
+    const l = layoutChart(radialMoved)
+    const a = l.placed.find((p) => p.node.id === 'a')!
+    expect(a.x).toBe(800)
+    expect(a.y).toBe(600)
+    expect(l.connectors.every((d) => d.startsWith('M'))).toBe(true)
+    expect(l.width).toBeGreaterThan(800)
+  })
+})
+
 describe('radial layout', () => {
   const radial = (): OrgChart => ({
     version: 1,

@@ -10,7 +10,7 @@ import {
 import { ChartSvg } from './ChartSvg'
 import { exportJson, exportPng, exportSvg } from './export'
 import { layoutChart } from './layout'
-import { deleteNode, duplicateNode, normalizeChart, type OrgChart } from './model'
+import { deleteNode, duplicateNode, normalizeChart, setNodePos, type OrgChart } from './model'
 import { Minimap, type Viewport } from './Minimap'
 import { type Anchor, NodeToolbar } from './NodeToolbar'
 import { SidePanel } from './SidePanel'
@@ -26,6 +26,8 @@ const THEME_KEY = 'astrion-theme'
 const CANVAS_PAD = 24
 const ZOOM_MIN = 0.25
 const ZOOM_MAX = 3
+/** Snap grid (px) for drag-to-reposition; hold Alt to move freely. */
+const SNAP = 8
 
 type Theme = 'light' | 'dark'
 
@@ -73,6 +75,8 @@ export default function App() {
   const [viewport, setViewport] = useState<Viewport | null>(null)
   const [spaceHeld, setSpaceHeld] = useState(false)
   const [panning, setPanning] = useState(false)
+  // Live position while a box is being dragged (not yet committed to history).
+  const [drag, setDrag] = useState<{ id: string; x: number; y: number } | null>(null)
   const svgHostRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
   const canvasWrapRef = useRef<HTMLDivElement>(null)
@@ -82,6 +86,9 @@ export default function App() {
   const pendingZoomRef = useRef<{ svgX: number; svgY: number; offX: number; offY: number } | null>(null)
   const panRef = useRef<{ x: number; y: number; sl: number; st: number; moved: boolean } | null>(null)
   const skipClickRef = useRef(false)
+  // A drag just moved a box, so swallow the click it would otherwise fire.
+  const nodeMovedRef = useRef(false)
+  const draggingRef = useRef(false)
   const lastSelRef = useRef<string | null>(null)
   const zoomRef = useRef(zoom)
   zoomRef.current = zoom
@@ -186,7 +193,13 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [undo, redo, selectedId, chart, setChart])
 
-  const layout = useMemo(() => layoutChart(chart), [chart])
+  // While dragging, lay out a chart with the box at its live position so the
+  // box and its connectors track the pointer without touching undo history.
+  const displayChart = useMemo(
+    () => (drag ? setNodePos(chart, drag.id, { x: drag.x, y: drag.y }) : chart),
+    [chart, drag],
+  )
+  const layout = useMemo(() => layoutChart(displayChart), [displayChart])
 
   // Zoom the whole chart to fit the visible canvas, then scroll to the origin.
   const fitToScreen = useCallback(() => {
@@ -478,6 +491,73 @@ export default function App() {
     }
   }
 
+  // Drag a box to give it a manual position. Movement is tracked on the window
+  // (so it keeps working past the box edges) and only committed on release, so
+  // the whole drag is a single undo step. A sub-threshold press stays a click.
+  const onNodePointerDown = useCallback(
+    (id: string, e: ReactPointerEvent<Element>) => {
+      nodeMovedRef.current = false
+      if (e.button !== 0 || spaceHeld || draggingRef.current) return
+      const p = layout.placed.find((n) => n.node.id === id)
+      if (!p) return
+      e.stopPropagation()
+      setSelectedId(id)
+      draggingRef.current = true
+      const startX = e.clientX
+      const startY = e.clientY
+      const baseX = p.x
+      const baseY = p.y
+      const baseChart = chart
+      const commit = setChart
+      let moved = false
+      let curX = baseX
+      let curY = baseY
+      const onMove = (ev: PointerEvent) => {
+        const dxPx = ev.clientX - startX
+        const dyPx = ev.clientY - startY
+        if (!moved && Math.abs(dxPx) + Math.abs(dyPx) < 4) return
+        if (!moved) {
+          moved = true
+          document.body.style.userSelect = 'none'
+          document.body.style.cursor = 'move'
+        }
+        const z = zoomRef.current
+        const nx = baseX + dxPx / z
+        const ny = baseY + dyPx / z
+        const step = ev.altKey ? 1 : SNAP
+        curX = Math.max(0, Math.round(nx / step) * step)
+        curY = Math.max(0, Math.round(ny / step) * step)
+        setDrag({ id, x: curX, y: curY })
+      }
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        window.removeEventListener('pointercancel', onUp)
+        document.body.style.userSelect = ''
+        document.body.style.cursor = ''
+        draggingRef.current = false
+        if (moved) {
+          nodeMovedRef.current = true
+          commit(setNodePos(baseChart, id, { x: curX, y: curY }))
+        }
+        setDrag(null)
+      }
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+      window.addEventListener('pointercancel', onUp)
+    },
+    [layout.placed, spaceHeld, chart, setChart],
+  )
+
+  // Box clicks select — unless the click is the tail of a drag that moved.
+  const selectNode = useCallback((id: string) => {
+    if (nodeMovedRef.current) {
+      nodeMovedRef.current = false
+      return
+    }
+    setSelectedId(id)
+  }, [])
+
   // Scroll the canvas so an SVG point (from a minimap click) is centered.
   const navigateTo = useCallback(
     (svgX: number, svgY: number) => {
@@ -619,6 +699,12 @@ export default function App() {
                 skipClickRef.current = false
                 return
               }
+              // A drag that ended over the canvas gutter (box clamped at an
+              // edge) fires its trailing click here — keep the box selected.
+              if (nodeMovedRef.current) {
+                nodeMovedRef.current = false
+                return
+              }
               setSelectedId(null)
             }}
           >
@@ -641,7 +727,12 @@ export default function App() {
                 className="svg-host"
                 style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
               >
-                <ChartSvg layout={layout} selectedId={selectedId} onSelect={setSelectedId} />
+                <ChartSvg
+                  layout={layout}
+                  selectedId={selectedId}
+                  onSelect={selectNode}
+                  onNodePointerDown={onNodePointerDown}
+                />
               </div>
             )}
           </div>
