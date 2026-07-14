@@ -1,1 +1,119 @@
-# orgchartapp
+# Astrion Org Chart Builder
+
+A repeatable, browser-based app that produces **Astrion-branded organization charts
+for proposals**. Charts are defined as structured JSON and rendered through a
+deterministic layout engine — the same input always produces the same professional
+output — while staying fully adaptable per customer: roles, PWS references,
+deliverables, interfaces, lines of communication, mission-focus groupings, badges,
+and legends.
+
+![Built with Vite + React + TypeScript](https://img.shields.io/badge/stack-Vite%20%2B%20React%20%2B%20TS-1D4F91)
+
+## Quick start
+
+```bash
+npm install
+npm run dev      # open the printed localhost URL
+npm run build    # production build in dist/
+```
+
+The app runs entirely in the browser — no backend, no data leaves your machine.
+Your working chart autosaves to localStorage.
+
+## Using the app
+
+1. **Start from a template** (toolbar → "New from template…"):
+   - **Program Office** — divisions with stacked capability lists and orange corner markers.
+   - **Director Level** — leadership boxes with PWS / Deliverables / Interface rows,
+     key badges, and a green "Mission Focus" zone.
+   - **PMO** — corporate and customer columns with two-way communication-channel arrows
+     and a dashed PMO container.
+2. **Click any box** (in the chart or the tree) to edit its title, person name,
+   style, bullets, detail rows, badges, photo placeholder, and width.
+   Add children/siblings, reorder, or delete from the same panel.
+3. **Chart tab** — chart title, group zones (tinted or dashed, pick member boxes),
+   communication lines between any two boxes, legend items, and extra
+   independent trees/columns.
+4. **Export** — `Export SVG` (drops straight into PowerPoint/Word and stays
+   razor-sharp), `PNG 2×` / `PNG 4×` for high-DPI raster placement, and
+   `Save JSON` to store the chart definition alongside the proposal so it can be
+   reloaded and regenerated identically later.
+
+### Repeatability workflow
+
+Save the chart's JSON (`Save JSON`) into the proposal's working folder. Anyone can
+later `Load JSON` and get a pixel-identical chart, tweak names or PWS numbers, and
+re-export. Nothing is hand-positioned, so charts never drift off-style between
+volumes or authors.
+
+## Branding
+
+Every color, font, and layout metric lives in **`src/theme.ts`**. The editor only
+exposes semantic styles (Primary navy / Secondary blue / Tertiary light blue /
+Accent orange), so charts cannot go off-brand.
+
+> The build environment could not reach astrion.us, so the palette is a close
+> professional approximation of the Astrion identity. To make it exact, paste the
+> hex values from the Astrion brand guide into `src/theme.ts` — every box, badge,
+> zone, and legend updates automatically.
+
+## Chart model (JSON)
+
+```jsonc
+{
+  "version": 1,
+  "meta": { "title": "Program Leadership Organization", "showTitle": true },
+  "roots": [
+    {
+      "id": "gm",
+      "title": "General Manager",
+      "name": "Jane Smith",            // italic person name
+      "photo": true,                    // photo placeholder
+      "variant": "primary",            // primary | secondary | tertiary | accent | hidden
+      "badges": ["keyGold"],           // keyGold | keyGray | cornerAccent
+      "details": [                      // white rows attached under the box
+        { "label": "PWS:", "text": "2.1" },
+        { "label": "Interface:", "text": "Customer CO, COR, CC" }
+      ],
+      "childLayout": "row",            // row (side by side) | stack (capability list)
+      "children": []
+    }
+  ],
+  "groups": [                           // tinted zones / dashed containers
+    { "id": "g1", "label": "Mission Focus", "style": "green", "memberIds": ["gm"] }
+  ],
+  "comms": [                            // communication-channel arrows
+    { "id": "c1", "fromId": "gm", "toId": "other", "twoWay": true }
+  ],
+  "legend": [
+    { "id": "l1", "marker": "keyGold", "label": "RFP Required" }
+  ]
+}
+```
+
+Tips:
+
+- `variant: "hidden"` makes an invisible container — use it with
+  `childLayout: "stack"` to build free-standing columns (corporate resources,
+  customer stakeholders) like the PMO template.
+- Widths default to the theme metric; set `width` per node when a box needs to
+  carry more text.
+
+## Project layout
+
+| File | Purpose |
+| --- | --- |
+| `src/theme.ts` | Astrion brand tokens + layout metrics (single source of truth) |
+| `src/model.ts` | Chart JSON types and tree-editing helpers |
+| `src/layout.ts` | Deterministic layout engine (tidy tree, stacks, zones, connectors) |
+| `src/ChartSvg.tsx` | Pure SVG renderer (self-contained output, export-safe) |
+| `src/templates.ts` | Starter charts modeled on Astrion proposal patterns |
+| `src/SidePanel.tsx` | Structured editor (boxes, zones, comms, legend, JSON) |
+| `src/export.ts` | SVG / high-DPI PNG / JSON export |
+
+## Deployment
+
+`.github/workflows/deploy.yml` builds and publishes the app to GitHub Pages on
+every push to `main` (enable Pages → "GitHub Actions" in the repo settings).
+The Vite `base` is relative, so the build also runs from any static host or
+straight off the filesystem.
