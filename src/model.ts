@@ -1,3 +1,4 @@
+import { palette } from './theme'
 import type { ZoneStyle } from './theme'
 
 /** Semantic box style. 'hidden' is an invisible container used to build
@@ -38,6 +39,9 @@ export interface OrgNode {
   details?: DetailRow[]
   badges?: BadgeType[]
   variant: Variant
+  /** Optional fill override (hex). Wins over the variant color; text color is
+   *  picked automatically for contrast. Clear it to fall back to the variant. */
+  color?: string
   /** Optional width override in px (default from theme metrics). */
   width?: number
   /** How this node's children are arranged. */
@@ -120,6 +124,22 @@ export function allNodes(chart: OrgChart): { node: OrgNode; depth: number }[] {
   const out: { node: OrgNode; depth: number }[] = []
   visit(chart.roots, (node, _p, depth) => out.push({ node, depth }))
   return out
+}
+
+/** The complete set of on-brand fill values (uppercased for comparison). */
+const BRAND_COLORS = new Set<string>(Object.values(palette).map((c) => c.toUpperCase()))
+
+/**
+ * Drop any box `color` override that is not an Astrion brand color, so a chart
+ * can never render off-brand — even when hand-edited via the JSON tab or loaded
+ * from an imported/older file. Mutates the passed chart (callers pass a freshly
+ * parsed object) and returns it.
+ */
+export function sanitizeColors(chart: OrgChart): OrgChart {
+  visit(chart.roots, (n) => {
+    if (n.color && !BRAND_COLORS.has(n.color.toUpperCase())) delete n.color
+  })
+  return chart
 }
 
 export function findNode(chart: OrgChart, id: string): OrgNode | null {

@@ -425,3 +425,19 @@ body,
   color: #6b7a8d;
   line-height: 1.25;
 }
+
+/* Clickable brand-color quick picks in the box editor. Higher specificity than
+   `.editor button` so the swatch keeps its own size/border. */
+.editor .swatch-btn {
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border-radius: 5px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+}
+
+.editor .swatch-btn.active {
+  outline: 2px solid var(--force);
+  outline-offset: 1px;
+}

@@ -2,7 +2,7 @@ import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo
 import { ChartSvg } from './ChartSvg'
 import { exportJson, exportPng, exportSvg } from './export'
 import { layoutChart } from './layout'
-import type { OrgChart } from './model'
+import { sanitizeColors, type OrgChart } from './model'
 import { SidePanel } from './SidePanel'
 import { DEFAULT_TEMPLATE_KEY, templates } from './templates'
 
@@ -22,7 +22,7 @@ function loadInitial(): OrgChart {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as OrgChart
-      if (parsed && Array.isArray(parsed.roots)) return parsed
+      if (parsed && Array.isArray(parsed.roots)) return sanitizeColors(parsed)
     }
   } catch {
     /* fall through to template */
@@ -141,7 +141,7 @@ export default function App() {
       try {
         const parsed = JSON.parse(String(reader.result)) as OrgChart
         if (!parsed.roots || !Array.isArray(parsed.roots)) throw new Error('bad file')
-        setChart(parsed)
+        setChart(sanitizeColors(parsed))
         setSelectedId(null)
       } catch {
         window.alert('That file is not a valid org-chart JSON definition.')

@@ -15,6 +15,7 @@ import {
   deleteNode,
   findNode,
   moveNode,
+  sanitizeColors,
   uid,
   updateNode,
 } from './model'
@@ -64,6 +65,15 @@ const ZONE_STYLES: { value: ZoneStyle; label: string }[] = [
   { value: 'dashed', label: 'Dashed container' },
 ]
 
+/**
+ * Every Astrion brand color, derived straight from the palette so the picker is
+ * always the complete brand set and never drifts. Off-brand colors are not
+ * offered — the per-box color override is restricted to these values.
+ */
+const COLOR_SWATCHES: { label: string; color: string }[] = Object.entries(palette).map(
+  ([key, color]) => ({ label: key.charAt(0).toUpperCase() + key.slice(1), color }),
+)
+
 function NodeTree({ chart, selectedId, onSelect }: Omit<Props, 'onChange'>) {
   const rows = allNodes(chart)
   const treeRef = useRef<HTMLDivElement>(null)
@@ -85,7 +95,10 @@ function NodeTree({ chart, selectedId, onSelect }: Omit<Props, 'onChange'>) {
           style={{ paddingLeft: 8 + depth * 14 }}
           onClick={() => onSelect(node.id)}
         >
-          <span className={`dot dot-${node.variant}`} />
+          <span
+            className={`dot dot-${node.variant}`}
+            style={node.color ? { background: node.color, border: 'none' } : undefined}
+          />
           <span className="tree-title">{node.title || '(untitled)'}</span>
         </button>
       ))}
@@ -132,6 +145,29 @@ function NodeEditor({ chart, onChange, selectedId, onSelect }: Props) {
           </select>
         </label>
       </div>
+      <fieldset>
+        <legend>Box color (Astrion brand)</legend>
+        <div className="swatches">
+          {COLOR_SWATCHES.map(({ label, color }) => (
+            <button
+              key={color}
+              type="button"
+              title={`${label} ${color}`}
+              className={`swatch-btn${node.color === color ? ' active' : ''}`}
+              style={{ background: color }}
+              onClick={() => patch({ color })}
+            />
+          ))}
+        </div>
+        <button className="sm" disabled={!node.color} onClick={() => patch({ color: undefined })}>
+          Use style color
+        </button>
+        <p className="hint">
+          Brand colors only. Overrides the Style color for this box; the text color adjusts
+          automatically for contrast. Clear it to fall back to the Style color.
+        </p>
+      </fieldset>
+
       <div className="two-col">
         <label>Width (px, blank = auto)
           <input
@@ -379,19 +415,7 @@ function ChartEditor({ chart, onChange, onSelect }: Props) {
       <fieldset>
         <legend>Astrion brand palette (locked)</legend>
         <div className="swatches">
-          {(
-            [
-              ['Force', palette.force],
-              ['Sky', palette.sky],
-              ['Refraction', palette.refraction],
-              ['Daylight', palette.daylight],
-              ['Zenith', palette.zenith],
-              ['Midnight', palette.midnight],
-              ['Supernova', palette.supernova],
-              ['Twilight', palette.twilight],
-              ['Water', palette.water],
-            ] as const
-          ).map(([label, color]) => (
+          {COLOR_SWATCHES.map(({ label, color }) => (
             <div key={label} className="swatch">
               <span style={{ background: color }} />
               <small>{label}<br />{color}</small>
@@ -432,7 +456,8 @@ function JsonEditor({ chart, onChange }: Pick<Props, 'chart' | 'onChange'>) {
               parsed.comms ??= []
               parsed.legend ??= []
               parsed.meta ??= { title: 'Org Chart', showTitle: true }
-              onChange(parsed)
+              // Enforce brand-only box colors even for hand-edited JSON.
+              onChange(sanitizeColors(parsed))
               setError(null)
             } catch (e) {
               setError(e instanceof Error ? e.message : 'Invalid JSON')
