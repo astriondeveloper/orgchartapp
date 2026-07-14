@@ -274,6 +274,63 @@ describe('layered layout', () => {
   })
 })
 
+describe('matrix and swimlane layouts', () => {
+  const grouped = (layout: 'matrix' | 'swimlane'): OrgChart => ({
+    version: 1,
+    meta: { title: 'G', showTitle: true, layout },
+    roots: [
+      {
+        id: 'ceo',
+        title: 'CEO',
+        variant: 'primary',
+        children: [
+          { id: 'eng', title: 'Eng', variant: 'secondary', children: [{ id: 'eng1', title: 'Eng1', variant: 'tertiary' }] },
+          { id: 'sales', title: 'Sales', variant: 'secondary', children: [{ id: 'sales1', title: 'Sales1', variant: 'tertiary' }] },
+        ],
+      },
+    ],
+    groups: [
+      { id: 'g1', label: 'Engineering', style: 'blue', memberIds: ['eng'] },
+      { id: 'g2', label: 'Sales', style: 'green', memberIds: ['sales'] },
+    ],
+    comms: [],
+    legend: [],
+  })
+
+  it('matrix separates groups into columns and depth into rows', () => {
+    const l = layoutChart(grouped('matrix'))
+    const p = (id: string) => l.placed.find((n) => n.node.id === id)!
+    expect(l.placed).toHaveLength(5)
+    // Eng subtree is left of the Sales subtree (distinct columns).
+    expect(p('eng').x).toBeLessThan(p('sales').x)
+    expect(p('eng1').x).toBeLessThan(p('sales1').x)
+    // Depth increases downward: a child sits below its parent's row.
+    expect(p('eng').y).toBeLessThan(p('eng1').y)
+    expect(l.connectors.length).toBeGreaterThan(0)
+  })
+
+  it('swimlane stacks each group into its own lane', () => {
+    const l = layoutChart(grouped('swimlane'))
+    const p = (id: string) => l.placed.find((n) => n.node.id === id)!
+    // Eng lane sits entirely left of the Sales lane.
+    expect(Math.max(p('eng').x + p('eng').w, p('eng1').x + p('eng1').w)).toBeLessThanOrEqual(
+      Math.min(p('sales').x, p('sales1').x),
+    )
+    // Within a lane, nodes stack vertically (no horizontal offset by depth).
+    expect(p('eng').x).toBe(p('eng1').x)
+    expect(p('eng').y).toBeLessThan(p('eng1').y)
+    expect(l.placed.every((n) => Number.isFinite(n.x) && Number.isFinite(n.y))).toBe(true)
+  })
+
+  it('falls back to per-root columns when no groups are defined', () => {
+    const chart = grouped('matrix')
+    chart.groups = []
+    const l = layoutChart(chart)
+    expect(l.placed).toHaveLength(5)
+    expect(l.placed.every((n) => Number.isFinite(n.x))).toBe(true)
+  })
+})
+
 describe('radial layout', () => {
   const radial = (): OrgChart => ({
     version: 1,

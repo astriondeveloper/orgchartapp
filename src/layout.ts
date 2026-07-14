@@ -442,12 +442,12 @@ function applyOverrides(placed: PlacedNode[]): boolean {
   return moved
 }
 
-/** Re-route parent→child connectors from the final box geometry. The tidy-tree
- *  bus routing assumes auto positions, so once any box is manually moved every
- *  connector is redrawn as an orthogonal elbow that follows its boxes. Hidden
- *  containers draw no line, so their descendants connect to the nearest visible
- *  ancestor instead. */
-function overrideConnectors(chart: OrgChart, placed: PlacedNode[]): string[] {
+/** Parent→child connectors as orthogonal elbows routed from the final box
+ *  geometry. Used by the tree layout once a box is manually moved (the bus
+ *  routing assumes auto positions) and by the graph layouts (layered / matrix /
+ *  swimlane), whose boxes are not in tidy-tree positions. Hidden containers
+ *  draw no line, so their descendants connect to the nearest visible ancestor. */
+function hierarchyConnectors(chart: OrgChart, placed: PlacedNode[]): string[] {
   const parentOf = new Map<string, OrgNode | null>()
   visit(chart.roots, (n, parent) => parentOf.set(n.id, parent))
   const out: string[] = []
@@ -608,16 +608,22 @@ function layoutRadial(chart: OrgChart): Layout {
   return assemble(chart, placed, connectors)
 }
 
-/* ------------------------------------------------------------- layered */
+/* ------------------------------ graph layouts (layered/matrix/swimlane) */
 
-const LAYERED_SWEEPS = 6
+interface VisibleModel {
+  /** Visible nodes in document (DFS) order. */
+  nodes: OrgNode[]
+  measured: Map<string, Measured>
+  idset: Set<string>
+  /** Nearest visible ancestor (hidden containers are bridged). */
+  visParent: (n: OrgNode) => OrgNode | null
+  /** Tree depth over visible nodes (roots = 0). */
+  depth: (n: OrgNode) => number
+}
 
-/** Sugiyama-lite layered layout. Every node is ranked into a depth-aligned row;
- *  barycenter passes center parents over their children (and pull cross-linked
- *  nodes together), so global peers line up and dotted-line relationships read
- *  clearly. Comms are drawn as the cross-layer edges by assemble(). */
-function layoutLayered(chart: OrgChart): Layout {
-  // Nearest visible ancestor (hidden containers are bridged).
+/** Shared prep for the graph layouts: visible nodes + measurements, a
+ *  nearest-visible-ancestor lookup, and memoized tree depth. */
+function collectVisible(chart: OrgChart): VisibleModel {
   const parentOf = new Map<string, OrgNode | null>()
   visit(chart.roots, (n, p) => parentOf.set(n.id, p))
   const visParent = (n: OrgNode): OrgNode | null => {
@@ -625,8 +631,6 @@ function layoutLayered(chart: OrgChart): Layout {
     while (a && a.variant === 'hidden') a = parentOf.get(a.id) ?? null
     return a
   }
-
-  // Visible nodes (DFS order) and their box measurements.
   const measured = new Map<string, Measured>()
   for (const r of chart.roots) {
     const stack: Measured[] = [measureNode(r, true)]
@@ -641,19 +645,86 @@ function layoutLayered(chart: OrgChart): Layout {
     if (n.variant !== 'hidden') nodes.push(n)
   })
   const idset = new Set(nodes.map((n) => n.id))
-  if (!nodes.length) return assemble(chart, [], [])
-
-  // Layer = tree depth via the nearest visible ancestor (acyclic, so no cycles).
-  const layer = new Map<string, number>()
-  const layerOf = (n: OrgNode): number => {
-    const cached = layer.get(n.id)
+  const depthCache = new Map<string, number>()
+  const depth = (n: OrgNode): number => {
+    const cached = depthCache.get(n.id)
     if (cached !== undefined) return cached
     const p = visParent(n)
-    const L = p && idset.has(p.id) ? layerOf(p) + 1 : 0
-    layer.set(n.id, L)
-    return L
+    const d = p && idset.has(p.id) ? depth(p) + 1 : 0
+    depthCache.set(n.id, d)
+    return d
   }
-  for (const n of nodes) layerOf(n)
+  return { nodes, measured, idset, visParent, depth }
+}
+
+/** Build a PlacedNode from a measurement + auto position, honoring a manual
+ *  override. Shared by every graph layout. */
+function placeBox(n: OrgNode, m: Measured, x: number, y: number): PlacedNode {
+  const at = n.pos ?? { x, y }
+  return {
+    node: n,
+    x: at.x,
+    y: at.y,
+    w: m.w,
+    headerH: m.headerH,
+    totalH: m.totalH,
+    titleLines: m.titleLines,
+    leftAlign: m.leftAlign,
+    bulletLines: m.bulletLines,
+    detailBlocks: m.detailBlocks,
+  }
+}
+
+/** Assign each visible node to a column. Columns come from the group zones
+ *  (a group owns its members' subtrees, matching the zone rectangles), with a
+ *  leading "unassigned" column for anything ungrouped. With no groups defined,
+ *  each root's subtree becomes a column. */
+function assignColumns(chart: OrgChart, model: VisibleModel): { label: string; ids: string[] }[] {
+  const { nodes, idset } = model
+  const nodeById = new Map<string, OrgNode>()
+  visit(chart.roots, (n) => nodeById.set(n.id, n))
+  const cols: { label: string; ids: string[] }[] = []
+
+  if (chart.groups.length) {
+    const sets = chart.groups.map((g) => {
+      const s = new Set<string>()
+      for (const mid of g.memberIds) {
+        const n = nodeById.get(mid)
+        if (n) for (const i of subtreeIds(n)) if (idset.has(i)) s.add(i)
+      }
+      return s
+    })
+    const buckets = chart.groups.map(() => [] as string[])
+    const ungrouped: string[] = []
+    for (const n of nodes) {
+      const gi = sets.findIndex((s) => s.has(n.id))
+      if (gi >= 0) buckets[gi].push(n.id)
+      else ungrouped.push(n.id)
+    }
+    if (ungrouped.length) cols.push({ label: '', ids: ungrouped })
+    chart.groups.forEach((g, i) => {
+      if (buckets[i].length) cols.push({ label: g.label ?? '', ids: buckets[i] })
+    })
+  } else {
+    for (const r of chart.roots) {
+      const s = new Set(subtreeIds(r))
+      const ids = nodes.filter((n) => s.has(n.id)).map((n) => n.id)
+      if (ids.length) cols.push({ label: r.title, ids })
+    }
+  }
+  return cols
+}
+
+const LAYERED_SWEEPS = 6
+
+/** Sugiyama-lite layered layout. Every node is ranked into a depth-aligned row;
+ *  barycenter passes center parents over their children (and pull cross-linked
+ *  nodes together), so global peers line up and dotted-line relationships read
+ *  clearly. Comms are drawn as the cross-layer edges by assemble(). */
+function layoutLayered(chart: OrgChart): Layout {
+  const model = collectVisible(chart)
+  const { nodes, measured, idset, depth, visParent } = model
+  if (!nodes.length) return assemble(chart, [], [])
 
   // Undirected adjacency for barycenter: hierarchy edges + comm cross-links.
   const adj = new Map<string, string[]>()
@@ -670,10 +741,10 @@ function layoutLayered(chart: OrgChart): Layout {
     if (idset.has(c.fromId) && idset.has(c.toId) && c.fromId !== c.toId) link(c.fromId, c.toId)
   }
 
-  // Rows by layer, initial order = DFS order.
-  const maxLayer = Math.max(...nodes.map((n) => layer.get(n.id)!))
+  // Rows by depth, initial order = DFS order.
+  const maxLayer = Math.max(...nodes.map((n) => depth(n)))
   const rows: string[][] = Array.from({ length: maxLayer + 1 }, () => [])
-  for (const n of nodes) rows[layer.get(n.id)!].push(n.id)
+  for (const n of nodes) rows[depth(n)].push(n.id)
 
   // Row Y offsets (each row is as tall as its tallest box).
   const ox = M.canvasPad
@@ -726,40 +797,112 @@ function layoutLayered(chart: OrgChart): Layout {
   for (const n of nodes) minX = Math.min(minX, cx.get(n.id)! - measured.get(n.id)!.w / 2)
   const shiftX = ox - minX
 
-  const placed: PlacedNode[] = nodes.map((n) => {
-    const m = measured.get(n.id)!
-    const auto = { x: cx.get(n.id)! - m.w / 2 + shiftX, y: rowY[layer.get(n.id)!] + oy }
-    const p = n.pos ?? auto
-    return {
-      node: n,
-      x: p.x,
-      y: p.y,
-      w: m.w,
-      headerH: m.headerH,
-      totalH: m.totalH,
-      titleLines: m.titleLines,
-      leftAlign: m.leftAlign,
-      bulletLines: m.bulletLines,
-      detailBlocks: m.detailBlocks,
-    }
-  })
+  const placed = nodes.map((n) =>
+    placeBox(n, measured.get(n.id)!, cx.get(n.id)! - measured.get(n.id)!.w / 2 + shiftX, rowY[depth(n)] + oy),
+  )
+  return assemble(chart, placed, hierarchyConnectors(chart, placed))
+}
 
-  // Hierarchy connectors (comms are drawn as cross-edges by assemble()).
-  const connectors: string[] = []
+const CELL_GAP = 16
+const COLUMN_GAP = 56
+
+/** Matrix layout: a 2D grid with rows = tree depth and columns = group (or, if
+ *  no groups are defined, root subtree). Cells stack their nodes vertically, so
+ *  columns stay one box wide and depth reads across the grid. */
+function layoutMatrix(chart: OrgChart): Layout {
+  const model = collectVisible(chart)
+  const { nodes, measured, depth } = model
+  if (!nodes.length) return assemble(chart, [], [])
+  const cols = assignColumns(chart, model)
+  const colOf = new Map<string, number>()
+  cols.forEach((c, ci) => c.ids.forEach((id) => colOf.set(id, ci)))
+  const maxRow = Math.max(...nodes.map((n) => depth(n)))
+
+  // Bucket nodes into cells (col, row), preserving DFS order.
+  const cell = (ci: number, r: number) => ci * (maxRow + 1) + r
+  const cells = new Map<number, string[]>()
   for (const n of nodes) {
-    const p = visParent(n)
-    if (!p || !idset.has(p.id)) continue
-    const a = boxOf(placed, p.id)
-    const b = boxOf(placed, n.id)
-    if (a && b) connectors.push(routeComm(a, b))
+    const k = cell(colOf.get(n.id)!, depth(n))
+    ;(cells.get(k) ?? cells.set(k, []).get(k)!).push(n.id)
+  }
+  const cellHeight = (ids: string[] | undefined) =>
+    ids && ids.length
+      ? ids.reduce((s, id) => s + measured.get(id)!.totalH, 0) + CELL_GAP * (ids.length - 1)
+      : 0
+
+  // Column widths (widest box in the column) and row heights (tallest cell).
+  const colW = cols.map((c) => Math.max(0, ...c.ids.map((id) => measured.get(id)!.w)))
+  const rowH: number[] = []
+  for (let r = 0; r <= maxRow; r++) {
+    rowH[r] = Math.max(0, ...cols.map((_, ci) => cellHeight(cells.get(cell(ci, r)))))
   }
 
-  return assemble(chart, placed, connectors)
+  const ox = M.canvasPad
+  const oy = M.canvasPad + (chart.meta.showTitle && chart.meta.title.trim() ? 44 : 0)
+  const colX: number[] = []
+  let xCursor = ox
+  for (let ci = 0; ci < cols.length; ci++) {
+    colX[ci] = xCursor
+    xCursor += colW[ci] + COLUMN_GAP
+  }
+  const rowYs: number[] = []
+  let yCursor = oy
+  for (let r = 0; r <= maxRow; r++) {
+    rowYs[r] = yCursor
+    yCursor += rowH[r] + M.levelGap
+  }
+
+  const placed: PlacedNode[] = []
+  for (let ci = 0; ci < cols.length; ci++) {
+    for (let r = 0; r <= maxRow; r++) {
+      const ids = cells.get(cell(ci, r))
+      if (!ids) continue
+      let y = rowYs[r]
+      for (const id of ids) {
+        const m = measured.get(id)!
+        const x = colX[ci] + (colW[ci] - m.w) / 2
+        placed.push(placeBox(m.node, m, x, y))
+        y += m.totalH + CELL_GAP
+      }
+    }
+  }
+  return assemble(chart, placed, hierarchyConnectors(chart, placed))
+}
+
+/** Swimlane layout: one vertical lane per group (or root subtree). Each lane is
+ *  an independent top-to-bottom list of its nodes (DFS order); lanes sit side by
+ *  side. The group zones render behind as the labeled lane bands. */
+function layoutSwimlane(chart: OrgChart): Layout {
+  const model = collectVisible(chart)
+  const { nodes, measured } = model
+  if (!nodes.length) return assemble(chart, [], [])
+  const cols = assignColumns(chart, model)
+
+  const ox = M.canvasPad
+  const oy = M.canvasPad + (chart.meta.showTitle && chart.meta.title.trim() ? 44 : 0)
+  const laneW = cols.map((c) => Math.max(0, ...c.ids.map((id) => measured.get(id)!.w)))
+
+  const placed: PlacedNode[] = []
+  let xCursor = ox
+  for (let ci = 0; ci < cols.length; ci++) {
+    let y = oy
+    for (const id of cols[ci].ids) {
+      const m = measured.get(id)!
+      const x = xCursor + (laneW[ci] - m.w) / 2
+      placed.push(placeBox(m.node, m, x, y))
+      y += m.totalH + CELL_GAP
+    }
+    xCursor += laneW[ci] + COLUMN_GAP
+  }
+  return assemble(chart, placed, hierarchyConnectors(chart, placed))
 }
 
 export function layoutChart(chart: OrgChart): Layout {
-  if ((chart.meta.layout ?? 'tree') === 'radial') return layoutRadial(chart)
-  if ((chart.meta.layout ?? 'tree') === 'layered') return layoutLayered(chart)
+  const mode = chart.meta.layout ?? 'tree'
+  if (mode === 'radial') return layoutRadial(chart)
+  if (mode === 'layered') return layoutLayered(chart)
+  if (mode === 'matrix') return layoutMatrix(chart)
+  if (mode === 'swimlane') return layoutSwimlane(chart)
 
   const dir: Direction = chart.meta.direction ?? 'TB'
   const vertical = dir === 'TB' || dir === 'BT'
@@ -812,5 +955,5 @@ export function layoutChart(chart: OrgChart): Layout {
   // Manual position overrides win over the auto layout; when present, connectors
   // are re-routed to follow the moved boxes.
   const moved = applyOverrides(placed)
-  return assemble(chart, placed, moved ? overrideConnectors(chart, placed) : connectors)
+  return assemble(chart, placed, moved ? hierarchyConnectors(chart, placed) : connectors)
 }
