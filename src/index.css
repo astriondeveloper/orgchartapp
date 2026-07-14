@@ -135,13 +135,39 @@ body,
 
 /* --------------------------------------------------------- side panel */
 .side-panel {
+  /* Width is driven inline by the resizable-panel state in App.tsx. */
   width: 340px;
-  min-width: 340px;
+  flex: 0 0 auto;
   background: #fff;
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+}
+
+/* Draggable divider between the side panel and the canvas. */
+.resizer {
+  flex: 0 0 6px;
+  align-self: stretch;
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  z-index: 3;
+  touch-action: none;
+}
+
+.resizer::before {
+  content: '';
+  position: absolute;
+  inset: 0 2px;
+  border-radius: 3px;
+  background: var(--border);
+  transition: background 0.15s ease;
+}
+
+.resizer:hover::before,
+.resizer:active::before {
+  background: var(--sky);
 }
 
 .tabs {

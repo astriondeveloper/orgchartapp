@@ -23,14 +23,24 @@ Your working chart autosaves to localStorage.
 ## Using the app
 
 1. **Start from a template** (toolbar → "New from template…"):
+   - **Simple Hierarchy** — a clean, generic top-down org chart. A neutral
+     starting point when no proposal-specific pattern is needed yet.
+   - **Functional Divisions** — an executive over departments, each carrying a
+     stacked list of sub-functions.
    - **Program Office** — divisions with stacked capability lists and orange corner markers.
    - **Director Level** — leadership boxes with PWS / Deliverables / Interface rows,
      key badges, and a green "Mission Focus" zone.
+   - **Joint Venture** — a customer / government column, a board → GM → managers →
+     technical-manager branch chain, a JV PMO service stack, and lines of communication.
+   - **Mentor-Protégé JV** — a multi-site mentor-protégé venture: a government-operational
+     column, a program-leadership chain, delivery-staff functional leads, and corporate resources.
    - **PMO** — corporate and customer columns with two-way communication-channel arrows
      and a dashed PMO container.
 2. **Click any box** (in the chart or the tree) to edit its title, person name,
    style, bullets, detail rows, badges, photo placeholder, and width.
    Add children/siblings, reorder, or delete from the same panel.
+   Drag the divider between the side panel and the canvas to **resize the panel**
+   (double-click it to reset); the width is remembered between sessions.
 3. **Chart tab** — chart title, group zones (tinted or dashed, pick member boxes),
    communication lines between any two boxes, legend items, and extra
    independent trees/columns.

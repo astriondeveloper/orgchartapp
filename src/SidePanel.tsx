@@ -435,10 +435,10 @@ function JsonEditor({ chart, onChange }: Pick<Props, 'chart' | 'onChange'>) {
   )
 }
 
-export function SidePanel(props: Props) {
+export function SidePanel({ width, ...props }: Props & { width: number }) {
   const [tab, setTab] = useState<'build' | 'chart' | 'json'>('build')
   return (
-    <aside className="side-panel">
+    <aside className="side-panel" style={{ width, minWidth: width, maxWidth: width }}>
       <div className="tabs">
         <button className={tab === 'build' ? 'active' : ''} onClick={() => setTab('build')}>Boxes</button>
         <button className={tab === 'chart' ? 'active' : ''} onClick={() => setTab('chart')}>Chart</button>

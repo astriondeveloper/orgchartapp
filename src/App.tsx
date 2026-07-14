@@ -1,12 +1,21 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChartSvg } from './ChartSvg'
 import { exportJson, exportPng, exportSvg } from './export'
 import { layoutChart } from './layout'
 import type { OrgChart } from './model'
 import { SidePanel } from './SidePanel'
-import { templates } from './templates'
+import { DEFAULT_TEMPLATE_KEY, templates } from './templates'
 
 const STORAGE_KEY = 'astrion-org-chart-v1'
+const SIDEBAR_KEY = 'astrion-sidebar-width-v1'
+const SIDEBAR_MIN = 280
+const SIDEBAR_DEFAULT = 340
+
+/** Largest the panel may grow to: never past ~760px, and always leaving room
+ *  for the canvas next to it. */
+function sidebarMax(): number {
+  return Math.max(SIDEBAR_MIN, Math.min(760, window.innerWidth - 320))
+}
 
 function loadInitial(): OrgChart {
   try {
@@ -18,7 +27,12 @@ function loadInitial(): OrgChart {
   } catch {
     /* fall through to template */
   }
-  return templates[1].build()
+  return (templates.find((t) => t.key === DEFAULT_TEMPLATE_KEY) ?? templates[0]).build()
+}
+
+function loadSidebarWidth(): number {
+  const raw = Number(localStorage.getItem(SIDEBAR_KEY))
+  return raw >= SIDEBAR_MIN && raw <= 900 ? raw : SIDEBAR_DEFAULT
 }
 
 export default function App() {
@@ -27,6 +41,7 @@ export default function App() {
   const [zoom, setZoom] = useState(1)
   const [history, setHistory] = useState<OrgChart[]>([])
   const [future, setFuture] = useState<OrgChart[]>([])
+  const [sidebarWidth, setSidebarWidth] = useState<number>(loadSidebarWidth)
   const svgHostRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -63,6 +78,36 @@ export default function App() {
     const id = setTimeout(() => localStorage.setItem(STORAGE_KEY, JSON.stringify(chart)), 300)
     return () => clearTimeout(id)
   }, [chart])
+
+  useEffect(() => {
+    localStorage.setItem(SIDEBAR_KEY, String(sidebarWidth))
+  }, [sidebarWidth])
+
+  // Drag the divider to resize the side panel. Listeners live on the window so
+  // the drag keeps tracking even when the pointer leaves the thin handle.
+  const startResize = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      e.preventDefault()
+      const startX = e.clientX
+      const startW = sidebarWidth
+      const max = sidebarMax()
+      const onMove = (ev: PointerEvent) => {
+        const next = Math.round(Math.min(max, Math.max(SIDEBAR_MIN, startW + ev.clientX - startX)))
+        setSidebarWidth(next)
+      }
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+    },
+    [sidebarWidth],
+  )
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -172,7 +217,22 @@ export default function App() {
       </header>
 
       <div className="main">
-        <SidePanel chart={chart} onChange={setChart} selectedId={selectedId} onSelect={setSelectedId} />
+        <SidePanel
+          width={sidebarWidth}
+          chart={chart}
+          onChange={setChart}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+        />
+        <div
+          className="resizer"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize side panel"
+          title="Drag to resize · double-click to reset"
+          onPointerDown={startResize}
+          onDoubleClick={() => setSidebarWidth(SIDEBAR_DEFAULT)}
+        />
         <div className="canvas" onClick={() => setSelectedId(null)}>
           <div
             ref={svgHostRef}
