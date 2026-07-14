@@ -275,6 +275,46 @@ body,
   outline: none;
 }
 
+.canvas.grab {
+  cursor: grab;
+}
+
+.canvas.grabbing {
+  cursor: grabbing;
+}
+
+/* Overview map, bottom-right of the canvas. Pure chrome, never exported. */
+.minimap {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 15;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+  line-height: 0;
+}
+
+.minimap svg {
+  display: block;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.mm-node {
+  fill: var(--accent);
+  opacity: 0.32;
+}
+
+.mm-view {
+  fill: color-mix(in srgb, var(--accent-sky) 16%, transparent);
+  stroke: var(--accent-sky);
+  stroke-width: 1.5;
+}
+
 .svg-host {
   display: inline-block;
   box-shadow: var(--shadow-2);
