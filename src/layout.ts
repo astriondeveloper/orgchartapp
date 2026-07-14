@@ -1,9 +1,15 @@
-import type { CommLink, Group, LegendItem, OrgChart, OrgNode } from './model'
+import type { CommLink, Direction, Group, LegendItem, OrgChart, OrgNode } from './model'
 import { metrics as M } from './theme'
 
 /*
  * Deterministic layout engine. Pure functions: the same OrgChart always
  * produces the same geometry, so proposal charts are perfectly repeatable.
+ *
+ * The tidy-tree is computed in a direction-agnostic (main, cross) space —
+ * `main` is the flow/depth axis (parent -> child) and `cross` is the axis
+ * siblings spread along. A final mapping turns (main, cross) into screen
+ * (x, y) for the chosen flow Direction (top-down, bottom-up, left-right,
+ * right-left). Boxes are never rotated; only their placement changes.
  */
 
 export interface Rect {
@@ -113,12 +119,15 @@ interface Measured {
   bulletLines: { text: string; first: boolean }[]
   detailBlocks: DetailBlock[]
   children: Measured[]
-  /** Full subtree extent. */
-  subW: number
-  subH: number
+  /** Box extent along the flow axis and the sibling axis. */
+  mainSize: number
+  crossSize: number
+  /** Full subtree extent along each axis. */
+  subMain: number
+  subCross: number
 }
 
-function measureNode(node: OrgNode): Measured {
+function measureNode(node: OrgNode, vertical: boolean): Measured {
   const hidden = node.variant === 'hidden'
   const w = hidden ? 0 : (node.width ?? M.boxWidth)
   const hasBadge = (node.badges ?? []).length > 0
@@ -151,25 +160,29 @@ function measureNode(node: OrgNode): Measured {
   }
   const totalH = headerH + detailBlocks.reduce((s, b) => s + b.h, 0)
 
-  const children = (node.children ?? []).map(measureNode)
+  // The box occupies `totalH` vertically and `w` horizontally. Which of those
+  // is "along the flow" (main) vs "across siblings" (cross) depends on flow.
+  const mainSize = vertical ? totalH : w
+  const crossSize = vertical ? w : totalH
+
+  const children = (node.children ?? []).map((c) => measureNode(c, vertical))
   const layoutMode = node.childLayout ?? 'row'
   const levelGap = hidden ? 0 : M.levelGap
   const stackGap = hidden ? 0 : M.stackGap
   const indent = hidden ? 0 : M.stackIndent
 
-  let subW = w
-  let subH = totalH
+  let subCross = crossSize
+  let subMain = mainSize
   if (children.length) {
     if (layoutMode === 'stack') {
-      const maxChildW = Math.max(...children.map((c) => c.subW))
-      subW = Math.max(w, indent + maxChildW)
-      subH = totalH + children.reduce((s, c) => s + (stackGap || M.stackGap) + c.subH, 0)
-      if (hidden) subH -= 0 // hidden stacks still use stackGap between items
+      const maxChildCross = Math.max(...children.map((c) => c.subCross))
+      subCross = Math.max(crossSize, indent + maxChildCross)
+      subMain = mainSize + children.reduce((s, c) => s + (stackGap || M.stackGap) + c.subMain, 0)
     } else {
-      const rowW =
-        children.reduce((s, c) => s + c.subW, 0) + M.siblingGap * (children.length - 1)
-      subW = Math.max(w, rowW)
-      subH = totalH + levelGap + Math.max(...children.map((c) => c.subH))
+      const rowCross =
+        children.reduce((s, c) => s + c.subCross, 0) + M.siblingGap * (children.length - 1)
+      subCross = Math.max(crossSize, rowCross)
+      subMain = mainSize + levelGap + Math.max(...children.map((c) => c.subMain))
     }
   }
 
@@ -183,80 +196,98 @@ function measureNode(node: OrgNode): Measured {
     bulletLines,
     detailBlocks,
     children,
-    subW,
-    subH,
+    mainSize,
+    crossSize,
+    subMain,
+    subCross,
   }
 }
 
 /* --------------------------------------------------------------- placing */
 
+/** A node placed in logical (main, cross) space, mapped to screen later. */
+interface Raw {
+  m: Measured
+  main: number
+  cross: number
+}
+
+/** A connector is a polyline of [cross, main] points in logical space. */
+type Polyline = [number, number][]
+
 function placeNode(
   m: Measured,
-  left: number,
-  y: number,
-  placed: PlacedNode[],
-  connectors: string[],
-): { cx: number } {
+  cross: number,
+  main: number,
+  raw: Raw[],
+  conns: Polyline[],
+): { center: number } {
   const hidden = m.node.variant === 'hidden'
   const layoutMode = m.node.childLayout ?? 'row'
 
-  let nodeX = left + (m.subW - m.w) / 2
-  if (layoutMode === 'stack') nodeX = left
+  let nodeCross = cross + (m.subCross - m.crossSize) / 2
+  if (layoutMode === 'stack') nodeCross = cross
 
   if (m.children.length && layoutMode === 'row') {
-    const rowW =
-      m.children.reduce((s, c) => s + c.subW, 0) + M.siblingGap * (m.children.length - 1)
-    let childLeft = left + (m.subW - rowW) / 2
-    const childY = y + m.totalH + (hidden ? 0 : M.levelGap)
+    const rowCross =
+      m.children.reduce((s, c) => s + c.subCross, 0) + M.siblingGap * (m.children.length - 1)
+    let childCross = cross + (m.subCross - rowCross) / 2
+    const childMain = main + m.mainSize + (hidden ? 0 : M.levelGap)
     const centers: number[] = []
     for (const c of m.children) {
-      const r = placeNode(c, childLeft, childY, placed, connectors)
-      centers.push(r.cx)
-      childLeft += c.subW + M.siblingGap
+      const r = placeNode(c, childCross, childMain, raw, conns)
+      centers.push(r.center)
+      childCross += c.subCross + M.siblingGap
     }
     // Center the parent box over its children's centers.
     const mid = (centers[0] + centers[centers.length - 1]) / 2
-    nodeX = Math.max(left, Math.min(mid - m.w / 2, left + m.subW - m.w))
+    nodeCross = Math.max(cross, Math.min(mid - m.crossSize / 2, cross + m.subCross - m.crossSize))
     if (!hidden) {
-      const pcx = nodeX + m.w / 2
-      const busY = y + m.totalH + M.levelGap / 2
-      connectors.push(`M ${pcx} ${y + m.totalH} V ${busY}`)
-      if (centers.length > 1 || Math.abs(centers[0] - pcx) > 0.5) {
-        const minX = Math.min(pcx, ...centers)
-        const maxX = Math.max(pcx, ...centers)
-        connectors.push(`M ${minX} ${busY} H ${maxX}`)
+      const pc = nodeCross + m.crossSize / 2
+      const busMain = main + m.mainSize + M.levelGap / 2
+      conns.push([
+        [pc, main + m.mainSize],
+        [pc, busMain],
+      ])
+      if (centers.length > 1 || Math.abs(centers[0] - pc) > 0.5) {
+        conns.push([
+          [Math.min(pc, ...centers), busMain],
+          [Math.max(pc, ...centers), busMain],
+        ])
       }
-      for (const cx of centers) connectors.push(`M ${cx} ${busY} V ${childY}`)
+      for (const cc of centers) {
+        conns.push([
+          [cc, busMain],
+          [cc, childMain],
+        ])
+      }
     }
   } else if (m.children.length && layoutMode === 'stack') {
     const indent = hidden ? 0 : M.stackIndent
-    const spineX = nodeX + indent / 2
-    let cy = y + m.totalH + M.stackGap
-    let lastMidY = cy
+    const spineCross = nodeCross + indent / 2
+    let cm = main + m.mainSize + M.stackGap
+    let lastMidMain = cm
     for (const c of m.children) {
-      placeNode(c, nodeX + indent, cy, placed, connectors)
-      lastMidY = cy + Math.min(c.headerH || c.totalH, 40) / 2
-      if (!hidden) connectors.push(`M ${spineX} ${lastMidY} H ${nodeX + indent}`)
-      cy += c.subH + M.stackGap
+      placeNode(c, nodeCross + indent, cm, raw, conns)
+      lastMidMain = cm + Math.min(c.mainSize || c.subMain, 40) / 2
+      if (!hidden) {
+        conns.push([
+          [spineCross, lastMidMain],
+          [nodeCross + indent, lastMidMain],
+        ])
+      }
+      cm += c.subMain + M.stackGap
     }
-    if (!hidden) connectors.push(`M ${spineX} ${y + m.totalH} V ${lastMidY}`)
+    if (!hidden) {
+      conns.push([
+        [spineCross, main + m.mainSize],
+        [spineCross, lastMidMain],
+      ])
+    }
   }
 
-  if (!hidden) {
-    placed.push({
-      node: m.node,
-      x: nodeX,
-      y,
-      w: m.w,
-      headerH: m.headerH,
-      totalH: m.totalH,
-      titleLines: m.titleLines,
-      leftAlign: m.leftAlign,
-      bulletLines: m.bulletLines,
-      detailBlocks: m.detailBlocks,
-    })
-  }
-  return { cx: nodeX + (m.w || m.subW) / 2 }
+  if (!hidden) raw.push({ m, main, cross: nodeCross })
+  return { center: nodeCross + (m.crossSize || m.subCross) / 2 }
 }
 
 /* ---------------------------------------------------------------- extras */
@@ -317,20 +348,55 @@ const LEGEND_PAD = 12
 const TITLE_BAR_SCALE = 0.9
 
 export function layoutChart(chart: OrgChart): Layout {
-  const placed: PlacedNode[] = []
-  const connectors: string[] = []
+  const dir: Direction = chart.meta.direction ?? 'TB'
+  const vertical = dir === 'TB' || dir === 'BT'
 
-  let left = M.canvasPad
-  let topY = M.canvasPad
-  if (chart.meta.showTitle && chart.meta.title.trim()) topY += 44
-
+  // 1) Lay out every root in logical (main, cross) space.
+  const raw: Raw[] = []
+  const rawConns: Polyline[] = []
+  let crossCursor = 0
   for (const root of chart.roots) {
-    const m = measureNode(root)
-    placeNode(m, left, topY, placed, connectors)
-    left += m.subW + M.rootGap
+    const m = measureNode(root, vertical)
+    placeNode(m, crossCursor, 0, raw, rawConns)
+    crossCursor += m.subCross + M.rootGap
   }
 
-  // Zones behind member subtrees.
+  // 2) Map logical -> screen for the chosen direction. The title always sits at
+  //    the top-left, so content is offset down by its height regardless of flow.
+  const ox = M.canvasPad
+  const oy = M.canvasPad + (chart.meta.showTitle && chart.meta.title.trim() ? 44 : 0)
+  const maxMain = raw.reduce((mx, r) => Math.max(mx, r.main + r.m.mainSize), 0)
+
+  const mapX = (cross: number, main: number) =>
+    dir === 'LR' ? ox + main : dir === 'RL' ? ox + (maxMain - main) : ox + cross
+  const mapY = (cross: number, main: number) =>
+    dir === 'TB' ? oy + main : dir === 'BT' ? oy + (maxMain - main) : oy + cross
+
+  const placed: PlacedNode[] = raw.map((r) => {
+    const { m } = r
+    // Same transform as the connectors; a flipped axis (BT/RL) references the
+    // box's far main edge so its top-left stays on-canvas.
+    return {
+      node: m.node,
+      x: mapX(r.cross, r.main) - (dir === 'RL' ? m.mainSize : 0),
+      y: mapY(r.cross, r.main) - (dir === 'BT' ? m.mainSize : 0),
+      w: m.w,
+      headerH: m.headerH,
+      totalH: m.totalH,
+      titleLines: m.titleLines,
+      leftAlign: m.leftAlign,
+      bulletLines: m.bulletLines,
+      detailBlocks: m.detailBlocks,
+    }
+  })
+
+  const connectors: string[] = rawConns.map((poly) =>
+    poly
+      .map(([c, mn], i) => `${i === 0 ? 'M' : 'L'} ${mapX(c, mn)} ${mapY(c, mn)}`)
+      .join(' '),
+  )
+
+  // Zones behind member subtrees (computed from final screen rects).
   const zones: Zone[] = []
   for (const g of chart.groups) {
     const ids = new Set<string>()
@@ -356,16 +422,12 @@ export function layoutChart(chart: OrgChart): Layout {
   }
 
   // Content bounds.
-  const xs = placed.map((p) => p.x).concat(zones.map((z) => z.rect.x))
-  const ys = placed.map((p) => p.y).concat(zones.map((z) => z.rect.y))
   const x2s = placed.map((p) => p.x + p.w).concat(zones.map((z) => z.rect.x + z.rect.w))
-  const y2s = placed
-    .map((p) => p.y + p.totalH)
-    .concat(zones.map((z) => z.rect.y + z.rect.h))
+  const y2s = placed.map((p) => p.y + p.totalH).concat(zones.map((z) => z.rect.y + z.rect.h))
+  const ys = placed.map((p) => p.y).concat(zones.map((z) => z.rect.y))
   const maxX = x2s.length ? Math.max(...x2s) : 400
   const maxY = y2s.length ? Math.max(...y2s) : 300
-  const minY = ys.length ? Math.min(...ys) : M.canvasPad
-  void xs
+  const minY = ys.length ? Math.min(...ys) : oy
 
   // Legend to the right of content.
   let legend: LegendLayout | null = null

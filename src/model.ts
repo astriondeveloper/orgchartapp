@@ -69,9 +69,12 @@ export interface LegendItem {
   label: string
 }
 
+/** Flow direction of the auto-layout: top-down, bottom-up, left-right, right-left. */
+export type Direction = 'TB' | 'BT' | 'LR' | 'RL'
+
 export interface OrgChart {
   version: 1
-  meta: { title: string; showTitle: boolean }
+  meta: { title: string; showTitle: boolean; direction?: Direction }
   /** Independent trees/columns laid out left to right. */
   roots: OrgNode[]
   groups: Group[]
@@ -274,11 +277,14 @@ export function normalizeChart(input: unknown): OrgChart {
   if (!Array.isArray(c.roots) || c.roots.length === 0) {
     throw new Error('Missing a non-empty "roots" array.')
   }
+  const dir = c.meta?.direction
+  const dirOk = dir === 'TB' || dir === 'BT' || dir === 'LR' || dir === 'RL'
   const chart: OrgChart = {
     version: CHART_VERSION,
     meta: {
       title: typeof c.meta?.title === 'string' ? c.meta.title : 'Org Chart',
       showTitle: c.meta?.showTitle !== false,
+      ...(dirOk ? { direction: dir } : {}),
     },
     roots: c.roots as OrgNode[],
     groups: Array.isArray(c.groups) ? c.groups : [],

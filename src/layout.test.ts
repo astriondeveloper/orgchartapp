@@ -48,3 +48,74 @@ describe('layoutChart', () => {
     expect(layoutChart(hidden).title).toBeNull()
   })
 })
+
+describe('layout direction', () => {
+  const base = (dir?: 'TB' | 'BT' | 'LR' | 'RL'): OrgChart => ({
+    version: 1,
+    meta: { title: 'Dir', showTitle: true, ...(dir ? { direction: dir } : {}) },
+    roots: [
+      {
+        id: 'root',
+        title: 'Root',
+        variant: 'primary',
+        childLayout: 'row',
+        children: [
+          { id: 'a', title: 'Alpha', variant: 'secondary' },
+          { id: 'b', title: 'Bravo', variant: 'secondary' },
+          { id: 'c', title: 'Charlie', variant: 'secondary' },
+        ],
+      },
+    ],
+    groups: [],
+    comms: [],
+    legend: [],
+  })
+  const byId = (chart: OrgChart, id: string) => {
+    const p = layoutChart(chart).placed.find((n) => n.node.id === id)
+    if (!p) throw new Error(`missing ${id}`)
+    return p
+  }
+  const overlaps = (chart: OrgChart) => {
+    const ps = layoutChart(chart).placed
+    for (let i = 0; i < ps.length; i++) {
+      for (let j = i + 1; j < ps.length; j++) {
+        const a = ps[i]
+        const b = ps[j]
+        if (a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.totalH && b.y < a.y + a.totalH) {
+          return `${a.node.id}/${b.node.id}`
+        }
+      }
+    }
+    return null
+  }
+
+  it('defaults to TB and matches an explicit TB layout', () => {
+    const d = layoutChart(base()).placed
+    const t = layoutChart(base('TB')).placed
+    expect(d.map((p) => [p.node.id, p.x, p.y])).toEqual(t.map((p) => [p.node.id, p.x, p.y]))
+  })
+
+  it('never overlaps boxes in any direction', () => {
+    for (const dir of ['TB', 'BT', 'LR', 'RL'] as const) {
+      expect(overlaps(base(dir))).toBeNull()
+    }
+  })
+
+  it('flows the parent above children in TB and below in BT', () => {
+    expect(byId(base('TB'), 'root').y).toBeLessThan(byId(base('TB'), 'a').y)
+    expect(byId(base('BT'), 'root').y).toBeGreaterThan(byId(base('BT'), 'a').y)
+  })
+
+  it('flows the parent left of children in LR and right in RL', () => {
+    expect(byId(base('LR'), 'root').x).toBeLessThan(byId(base('LR'), 'a').x)
+    expect(byId(base('RL'), 'root').x).toBeGreaterThan(byId(base('RL'), 'a').x)
+  })
+
+  it('transposes the spread between TB and LR', () => {
+    const tb = layoutChart(base('TB'))
+    const lr = layoutChart(base('LR'))
+    // Siblings spread horizontally in TB (wider) and vertically in LR (taller).
+    expect(tb.width).toBeGreaterThan(lr.width)
+    expect(lr.height).toBeGreaterThan(tb.height)
+  })
+})

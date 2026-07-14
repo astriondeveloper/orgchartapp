@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type {
   BadgeType,
+  Direction,
   LegendMarker,
   OrgChart,
   OrgNode,
@@ -56,6 +57,13 @@ const MARKERS: { value: LegendMarker; label: string }[] = [
   { value: 'orange', label: 'Orange zone' },
   { value: 'dashed', label: 'Dashed container' },
   { value: 'comm', label: 'Comm arrow' },
+]
+
+const DIRECTIONS: { value: Direction; label: string }[] = [
+  { value: 'TB', label: 'Top-down ↓' },
+  { value: 'BT', label: 'Bottom-up ↑' },
+  { value: 'LR', label: 'Left-right →' },
+  { value: 'RL', label: 'Right-left ←' },
 ]
 
 const ZONE_STYLES: { value: ZoneStyle; label: string }[] = [
@@ -267,6 +275,14 @@ function ChartEditor({ chart, onChange, onSelect }: Props) {
           onChange={(e) => onChange({ ...chart, meta: { ...chart.meta, showTitle: e.target.checked } })}
         />
         Show title on chart
+      </label>
+      <label>Flow direction
+        <select
+          value={chart.meta.direction ?? 'TB'}
+          onChange={(e) => onChange({ ...chart, meta: { ...chart.meta, direction: e.target.value as Direction } })}
+        >
+          {DIRECTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+        </select>
       </label>
       <button onClick={() => { const r = addRoot(chart); onChange(r.chart); onSelect(r.newId) }}>
         + Add independent tree / column
