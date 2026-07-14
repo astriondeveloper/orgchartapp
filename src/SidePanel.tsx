@@ -437,8 +437,14 @@ function JsonEditor({ chart, onChange }: Pick<Props, 'chart' | 'onChange'>) {
 
 export function SidePanel({ width, ...props }: Props & { width: number }) {
   const [tab, setTab] = useState<'build' | 'chart' | 'json'>('build')
+  // Scale the panel's text with its width so a wider panel reads larger. Every
+  // inner font size is defined in em, so they all track this single base.
+  const fontSize = Math.min(18, Math.max(13, 14 + (width - 340) * 0.009))
   return (
-    <aside className="side-panel" style={{ width, minWidth: width, maxWidth: width }}>
+    <aside
+      className="side-panel"
+      style={{ width, minWidth: width, maxWidth: width, fontSize: `${fontSize}px` }}
+    >
       <div className="tabs">
         <button className={tab === 'build' ? 'active' : ''} onClick={() => setTab('build')}>Boxes</button>
         <button className={tab === 'chart' ? 'active' : ''} onClick={() => setTab('chart')}>Chart</button>

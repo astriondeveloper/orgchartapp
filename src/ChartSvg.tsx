@@ -415,8 +415,9 @@ export function ChartSvg({ layout, selectedId, onSelect }: Props) {
           >
             {title.text.toUpperCase()}
           </text>
-          {/* Sky-gradient bar (Refraction first, per the brand standards). */}
-          <rect x={title.x} y={title.y + 8} width={190} height={4} fill="url(#skyGradient)" />
+          {/* Sky-gradient bar (Refraction first, per the brand standards),
+              sized to match the headline width above it. */}
+          <rect x={title.x} y={title.y + 8} width={title.w} height={4} fill="url(#skyGradient)" />
         </g>
       )}
     </svg>

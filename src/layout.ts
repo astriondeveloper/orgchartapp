@@ -59,7 +59,7 @@ export interface Layout {
   zones: Zone[]
   comms: CommPath[]
   legend: LegendLayout | null
-  title: { text: string; x: number; y: number } | null
+  title: { text: string; x: number; y: number; w: number } | null
   width: number
   height: number
 }
@@ -308,6 +308,12 @@ function routeComm(a: Rect, b: Rect): string {
 const LEGEND_ITEM_H = 24
 const LEGEND_PAD = 12
 
+// textWidth() is deliberately generous so boxes never clip their text; that
+// padding is invisible inside a box, but the headline accent bar sits directly
+// under the rendered title, so scale the estimate down to track the actual
+// glyph run instead of overshooting past the last word.
+const TITLE_BAR_SCALE = 0.82
+
 export function layoutChart(chart: OrgChart): Layout {
   const placed: PlacedNode[] = []
   const connectors: string[] = []
@@ -373,12 +379,21 @@ export function layoutChart(chart: OrgChart): Layout {
     legend = { x: maxX + M.legendGap, y: minY, w, h, items: chart.legend }
   }
 
+  // Headlines render all-caps at size 20 bold; measure that so the accent bar
+  // (and the canvas) can size to the actual title width.
   const title =
     chart.meta.showTitle && chart.meta.title.trim()
-      ? { text: chart.meta.title, x: M.canvasPad, y: M.canvasPad + 22 }
+      ? {
+          text: chart.meta.title,
+          x: M.canvasPad,
+          y: M.canvasPad + 22,
+          w: textWidth(chart.meta.title.toUpperCase(), 20, true) * TITLE_BAR_SCALE,
+        }
       : null
 
-  const width = (legend ? legend.x + legend.w : maxX) + M.canvasPad
+  const contentRight = legend ? legend.x + legend.w : maxX
+  const titleRight = title ? title.x + title.w : 0
+  const width = Math.max(contentRight, titleRight) + M.canvasPad
   const height = Math.max(maxY, legend ? legend.y + legend.h : 0) + M.canvasPad
 
   return { placed, connectors, zones, comms, legend, title, width, height }
