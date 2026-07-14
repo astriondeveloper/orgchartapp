@@ -106,8 +106,10 @@ export interface LegendItem {
 export type Direction = 'TB' | 'BT' | 'LR' | 'RL'
 
 /** Auto-layout strategy. 'tree' is the tidy-tree (with a Direction); 'radial'
- *  places the root at the center with descendants on concentric rings. */
-export type LayoutMode = 'tree' | 'radial'
+ *  places the root at the center with descendants on concentric rings;
+ *  'layered' ranks every node into depth-aligned rows (Sugiyama-lite) and pulls
+ *  cross-linked nodes together, for matrix / dotted-line org relationships. */
+export type LayoutMode = 'tree' | 'radial' | 'layered'
 
 export interface OrgChart {
   version: 1
@@ -345,7 +347,7 @@ export function normalizeChart(input: unknown): OrgChart {
   const dir = c.meta?.direction
   const dirOk = dir === 'TB' || dir === 'BT' || dir === 'LR' || dir === 'RL'
   const layout = c.meta?.layout
-  const layoutOk = layout === 'tree' || layout === 'radial'
+  const layoutOk = layout === 'tree' || layout === 'radial' || layout === 'layered'
   const chart: OrgChart = {
     version: CHART_VERSION,
     meta: {
