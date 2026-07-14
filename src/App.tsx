@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { ChartSvg } from './ChartSvg'
 import { exportJson, exportPng, exportSvg } from './export'
+import { exportPptx } from './pptx'
 import { layoutChart } from './layout'
 import { deleteNode, duplicateNode, normalizeChart, setNodePos, type OrgChart } from './model'
 import { Minimap, type Viewport } from './Minimap'
@@ -620,6 +621,9 @@ export default function App() {
         </button>
         <button onClick={() => { const svg = getSvg(); if (svg) void exportPng(svg, chart.meta.title, 4) }}>
           PNG 4×
+        </button>
+        <button onClick={() => { const svg = getSvg(); if (svg) void exportPptx(svg, chart.meta.title) }}>
+          PPTX
         </button>
 
         <span className="divider" />
