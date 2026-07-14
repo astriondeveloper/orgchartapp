@@ -113,9 +113,13 @@ export type Direction = 'TB' | 'BT' | 'LR' | 'RL'
  *  - 'swimlane' independent vertical lanes, one per group (or root) */
 export type LayoutMode = 'tree' | 'radial' | 'layered' | 'matrix' | 'swimlane'
 
+/** Spacing density. 'compact' tightens the gaps so the chart takes up less
+ *  room on a page (box interiors are unchanged). */
+export type Density = 'comfortable' | 'compact'
+
 export interface OrgChart {
   version: 1
-  meta: { title: string; showTitle: boolean; direction?: Direction; layout?: LayoutMode }
+  meta: { title: string; showTitle: boolean; direction?: Direction; layout?: LayoutMode; density?: Density }
   /** Independent trees/columns laid out left to right. */
   roots: OrgNode[]
   groups: Group[]
@@ -351,6 +355,8 @@ export function normalizeChart(input: unknown): OrgChart {
   const layout = c.meta?.layout
   const LAYOUTS = ['tree', 'radial', 'layered', 'matrix', 'swimlane']
   const layoutOk = typeof layout === 'string' && LAYOUTS.includes(layout)
+  const density = c.meta?.density
+  const densityOk = density === 'comfortable' || density === 'compact'
   const chart: OrgChart = {
     version: CHART_VERSION,
     meta: {
@@ -358,6 +364,7 @@ export function normalizeChart(input: unknown): OrgChart {
       showTitle: c.meta?.showTitle !== false,
       ...(dirOk ? { direction: dir } : {}),
       ...(layoutOk ? { layout } : {}),
+      ...(densityOk ? { density } : {}),
     },
     roots: c.roots as OrgNode[],
     groups: Array.isArray(c.groups) ? c.groups : [],

@@ -3,6 +3,7 @@ import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type {
   BadgeType,
   CommLink,
+  Density,
   Direction,
   EdgeArrow,
   EdgeStyle,
@@ -72,6 +73,11 @@ const LAYOUT_MODES: { value: LayoutMode; label: string }[] = [
   { value: 'layered', label: 'Layered (ranked rows)' },
   { value: 'matrix', label: 'Matrix (grid by group)' },
   { value: 'swimlane', label: 'Swimlane (lanes by group)' },
+]
+
+const DENSITIES: { value: Density; label: string }[] = [
+  { value: 'comfortable', label: 'Comfortable' },
+  { value: 'compact', label: 'Compact (fits a page)' },
 ]
 
 const DIRECTIONS: { value: Direction; label: string }[] = [
@@ -354,6 +360,14 @@ function ChartEditor({ chart, onChange, onSelect }: Props) {
           onChange={(e) => onChange({ ...chart, meta: { ...chart.meta, direction: e.target.value as Direction } })}
         >
           {DIRECTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+        </select>
+      </label>
+      <label>Density
+        <select
+          value={chart.meta.density ?? 'comfortable'}
+          onChange={(e) => onChange({ ...chart, meta: { ...chart.meta, density: e.target.value as Density } })}
+        >
+          {DENSITIES.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
         </select>
       </label>
       <button onClick={() => { const r = addRoot(chart); onChange(r.chart); onSelect(r.newId) }}>

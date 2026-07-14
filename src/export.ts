@@ -86,6 +86,16 @@ export function exportPng(svgEl: SVGSVGElement, title: string, scale: number): P
   })
 }
 
+/** Copy the chart as a PNG image to the clipboard, ready to paste straight into
+ *  a proposal document. Must be called from a user gesture (e.g. a click). */
+export async function copyPngToClipboard(svgEl: SVGSVGElement, scale = 2): Promise<void> {
+  if (typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) {
+    throw new Error('Image copy is not supported in this browser — use the PNG download instead.')
+  }
+  const { blob } = await svgToPngBlob(svgEl, scale)
+  await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+}
+
 export function exportJson(chart: OrgChart): void {
   download(
     new Blob([JSON.stringify(chart, null, 2)], { type: 'application/json' }),

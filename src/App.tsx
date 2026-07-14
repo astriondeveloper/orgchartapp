@@ -9,7 +9,7 @@ import {
   useState,
 } from 'react'
 import { ChartSvg } from './ChartSvg'
-import { exportJson, exportPng, exportSvg } from './export'
+import { copyPngToClipboard, exportJson, exportPng, exportSvg } from './export'
 import { exportPdf } from './pdf'
 import { exportPptx } from './pptx'
 import { layoutChart, previewDrag } from './layout'
@@ -80,6 +80,7 @@ export default function App() {
   const [panning, setPanning] = useState(false)
   // Live position while a box is being dragged (not yet committed to history).
   const [drag, setDrag] = useState<{ id: string; x: number; y: number } | null>(null)
+  const [copyState, setCopyState] = useState<'idle' | 'done' | 'error'>('idle')
   const svgHostRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
   const canvasWrapRef = useRef<HTMLDivElement>(null)
@@ -645,6 +646,20 @@ export default function App() {
 
         <span className="divider" />
 
+        <button
+          className="copy-btn"
+          title="Copy the chart as an image — paste it straight into a document"
+          onClick={() => {
+            const svg = getSvg()
+            if (!svg) return
+            copyPngToClipboard(svg)
+              .then(() => setCopyState('done'))
+              .catch(() => setCopyState('error'))
+              .finally(() => window.setTimeout(() => setCopyState('idle'), 2000))
+          }}
+        >
+          {copyState === 'done' ? '✓ Copied' : copyState === 'error' ? 'Copy failed' : 'Copy image'}
+        </button>
         <button onClick={() => { const svg = getSvg(); if (svg) exportSvg(svg, chart.meta.title) }}>
           Export SVG
         </button>

@@ -122,6 +122,44 @@ export const metrics = {
   legendGap: 30,
 } as const
 
+/** Spacing that changes with the density setting. "comfortable" mirrors the
+ *  metrics above; "compact" tightens every gap (and the canvas margin) so a
+ *  chart takes up less room on a document page. Box interiors and font sizes
+ *  are unchanged either way, so boxes stay legible and on-brand. */
+export interface LayoutGaps {
+  siblingGap: number
+  levelGap: number
+  stackGap: number
+  stackIndent: number
+  rootGap: number
+  zonePad: number
+  legendGap: number
+  canvasPad: number
+}
+
+export const layoutGaps: Record<'comfortable' | 'compact', LayoutGaps> = {
+  comfortable: {
+    siblingGap: metrics.siblingGap,
+    levelGap: metrics.levelGap,
+    stackGap: metrics.stackGap,
+    stackIndent: metrics.stackIndent,
+    rootGap: metrics.rootGap,
+    zonePad: metrics.zonePad,
+    legendGap: metrics.legendGap,
+    canvasPad: metrics.canvasPad,
+  },
+  compact: {
+    siblingGap: 14,
+    levelGap: 24,
+    stackGap: 6,
+    stackIndent: 14,
+    rootGap: 46,
+    zonePad: 10,
+    legendGap: 22,
+    canvasPad: 14,
+  },
+}
+
 export type ZoneStyle = 'green' | 'blue' | 'orange' | 'dashed'
 
 export const zoneFill: Record<Exclude<ZoneStyle, 'dashed'>, string> = {

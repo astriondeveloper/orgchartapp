@@ -150,6 +150,41 @@ describe('edges', () => {
   })
 })
 
+describe('density', () => {
+  const build = (density?: 'comfortable' | 'compact'): OrgChart => ({
+    version: 1,
+    meta: { title: 'D', showTitle: true, ...(density ? { density } : {}) },
+    roots: [
+      {
+        id: 'root',
+        title: 'Root',
+        variant: 'primary',
+        children: [
+          { id: 'a', title: 'Alpha', variant: 'secondary', children: [{ id: 'a1', title: 'A1', variant: 'tertiary' }] },
+          { id: 'b', title: 'Bravo', variant: 'secondary', children: [{ id: 'b1', title: 'B1', variant: 'tertiary' }] },
+        ],
+      },
+    ],
+    groups: [],
+    comms: [],
+    legend: [],
+  })
+
+  it('compact takes up less space than comfortable', () => {
+    const comfy = layoutChart(build('comfortable'))
+    const compact = layoutChart(build('compact'))
+    expect(compact.width).toBeLessThan(comfy.width)
+    expect(compact.height).toBeLessThan(comfy.height)
+    // Box sizes are unchanged — only the gaps shrink.
+    const boxW = (l: typeof comfy, id: string) => l.placed.find((p) => p.node.id === id)!.w
+    expect(boxW(compact, 'a')).toBe(boxW(comfy, 'a'))
+  })
+
+  it('defaults to comfortable', () => {
+    expect(layoutChart(build()).width).toBe(layoutChart(build('comfortable')).width)
+  })
+})
+
 describe('manual position overrides', () => {
   const chartWith = (pos?: { x: number; y: number }): OrgChart => ({
     version: 1,

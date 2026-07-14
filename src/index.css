@@ -200,6 +200,21 @@ body,
   cursor: default;
 }
 
+/* The copy-to-clipboard action is the primary export path, so give it accent
+   emphasis over the neutral download buttons. */
+.toolbar button.copy-btn {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.toolbar button.copy-btn:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  filter: brightness(1.06);
+}
+
 .toolbar button:focus-visible,
 .toolbar select:focus-visible {
   outline: none;

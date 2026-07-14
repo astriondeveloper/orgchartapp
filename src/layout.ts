@@ -1,6 +1,11 @@
 import type { CommLink, Direction, Group, LegendItem, OrgChart, OrgNode } from './model'
 import { visit } from './model'
-import { metrics as M } from './theme'
+import { type LayoutGaps, layoutGaps, metrics as M } from './theme'
+
+/** Resolve the active spacing (comfortable/compact) for a chart. */
+function gapsOf(chart: OrgChart): LayoutGaps {
+  return layoutGaps[chart.meta.density === 'compact' ? 'compact' : 'comfortable']
+}
 
 /*
  * Deterministic layout engine. Pure functions: the same OrgChart always
@@ -130,7 +135,7 @@ interface Measured {
   subCross: number
 }
 
-function measureNode(node: OrgNode, vertical: boolean): Measured {
+function measureNode(node: OrgNode, vertical: boolean, g: LayoutGaps): Measured {
   const hidden = node.variant === 'hidden'
   const w = hidden ? 0 : (node.width ?? M.boxWidth)
   const hasBadge = (node.badges ?? []).length > 0
@@ -168,11 +173,11 @@ function measureNode(node: OrgNode, vertical: boolean): Measured {
   const mainSize = vertical ? totalH : w
   const crossSize = vertical ? w : totalH
 
-  const children = (node.children ?? []).map((c) => measureNode(c, vertical))
+  const children = (node.children ?? []).map((c) => measureNode(c, vertical, g))
   const layoutMode = node.childLayout ?? 'row'
-  const levelGap = hidden ? 0 : M.levelGap
-  const stackGap = hidden ? 0 : M.stackGap
-  const indent = hidden ? 0 : M.stackIndent
+  const levelGap = hidden ? 0 : g.levelGap
+  const stackGap = hidden ? 0 : g.stackGap
+  const indent = hidden ? 0 : g.stackIndent
 
   let subCross = crossSize
   let subMain = mainSize
@@ -180,10 +185,10 @@ function measureNode(node: OrgNode, vertical: boolean): Measured {
     if (layoutMode === 'stack') {
       const maxChildCross = Math.max(...children.map((c) => c.subCross))
       subCross = Math.max(crossSize, indent + maxChildCross)
-      subMain = mainSize + children.reduce((s, c) => s + (stackGap || M.stackGap) + c.subMain, 0)
+      subMain = mainSize + children.reduce((s, c) => s + (stackGap || g.stackGap) + c.subMain, 0)
     } else {
       const rowCross =
-        children.reduce((s, c) => s + c.subCross, 0) + M.siblingGap * (children.length - 1)
+        children.reduce((s, c) => s + c.subCross, 0) + g.siblingGap * (children.length - 1)
       subCross = Math.max(crossSize, rowCross)
       subMain = mainSize + levelGap + Math.max(...children.map((c) => c.subMain))
     }
@@ -224,6 +229,7 @@ function placeNode(
   main: number,
   raw: Raw[],
   conns: Polyline[],
+  g: LayoutGaps,
 ): { center: number } {
   const hidden = m.node.variant === 'hidden'
   const layoutMode = m.node.childLayout ?? 'row'
@@ -233,21 +239,21 @@ function placeNode(
 
   if (m.children.length && layoutMode === 'row') {
     const rowCross =
-      m.children.reduce((s, c) => s + c.subCross, 0) + M.siblingGap * (m.children.length - 1)
+      m.children.reduce((s, c) => s + c.subCross, 0) + g.siblingGap * (m.children.length - 1)
     let childCross = cross + (m.subCross - rowCross) / 2
-    const childMain = main + m.mainSize + (hidden ? 0 : M.levelGap)
+    const childMain = main + m.mainSize + (hidden ? 0 : g.levelGap)
     const centers: number[] = []
     for (const c of m.children) {
-      const r = placeNode(c, childCross, childMain, raw, conns)
+      const r = placeNode(c, childCross, childMain, raw, conns, g)
       centers.push(r.center)
-      childCross += c.subCross + M.siblingGap
+      childCross += c.subCross + g.siblingGap
     }
     // Center the parent box over its children's centers.
     const mid = (centers[0] + centers[centers.length - 1]) / 2
     nodeCross = Math.max(cross, Math.min(mid - m.crossSize / 2, cross + m.subCross - m.crossSize))
     if (!hidden) {
       const pc = nodeCross + m.crossSize / 2
-      const busMain = main + m.mainSize + M.levelGap / 2
+      const busMain = main + m.mainSize + g.levelGap / 2
       conns.push([
         [pc, main + m.mainSize],
         [pc, busMain],
@@ -266,12 +272,12 @@ function placeNode(
       }
     }
   } else if (m.children.length && layoutMode === 'stack') {
-    const indent = hidden ? 0 : M.stackIndent
+    const indent = hidden ? 0 : g.stackIndent
     const spineCross = nodeCross + indent / 2
-    let cm = main + m.mainSize + M.stackGap
+    let cm = main + m.mainSize + g.stackGap
     let lastMidMain = cm
     for (const c of m.children) {
-      placeNode(c, nodeCross + indent, cm, raw, conns)
+      placeNode(c, nodeCross + indent, cm, raw, conns, g)
       lastMidMain = cm + Math.min(c.mainSize || c.subMain, 40) / 2
       if (!hidden) {
         conns.push([
@@ -279,7 +285,7 @@ function placeNode(
           [nodeCross + indent, lastMidMain],
         ])
       }
-      cm += c.subMain + M.stackGap
+      cm += c.subMain + g.stackGap
     }
     if (!hidden) {
       conns.push([
@@ -358,7 +364,7 @@ const TITLE_BAR_SCALE = 0.9
 
 /** Shared tail: build zones, edges, legend, title, and bounds from already
  *  positioned boxes + connectors. Used by every layout strategy. */
-function assemble(chart: OrgChart, placed: PlacedNode[], connectors: string[]): Layout {
+function assemble(chart: OrgChart, placed: PlacedNode[], connectors: string[], gaps: LayoutGaps): Layout {
   // Index once so zone/edge lookups are O(1) instead of scanning `placed`.
   const byId = indexById(placed)
 
@@ -385,7 +391,7 @@ function assemble(chart: OrgChart, placed: PlacedNode[], connectors: string[]): 
     if (x1 === Infinity) continue
     zones.push({
       group: g,
-      rect: { x: x1 - M.zonePad, y: y1 - M.zonePad, w: x2 - x1 + 2 * M.zonePad, h: y2 - y1 + 2 * M.zonePad },
+      rect: { x: x1 - gaps.zonePad, y: y1 - gaps.zonePad, w: x2 - x1 + 2 * gaps.zonePad, h: y2 - y1 + 2 * gaps.zonePad },
     })
   }
 
@@ -409,7 +415,7 @@ function assemble(chart: OrgChart, placed: PlacedNode[], connectors: string[]): 
   const ys = placed.map((p) => p.y).concat(zones.map((z) => z.rect.y))
   const maxX = x2s.length ? Math.max(...x2s) : 400
   const maxY = y2s.length ? Math.max(...y2s) : 300
-  const minY = ys.length ? Math.min(...ys) : M.canvasPad
+  const minY = ys.length ? Math.min(...ys) : gaps.canvasPad
 
   // Legend to the right of content.
   let legend: LegendLayout | null = null
@@ -422,7 +428,7 @@ function assemble(chart: OrgChart, placed: PlacedNode[], connectors: string[]): 
       LEGEND_PAD * 2 +
       30
     const h = LEGEND_PAD * 2 + 18 + chart.legend.length * LEGEND_ITEM_H
-    legend = { x: maxX + M.legendGap, y: minY, w, h, items: chart.legend }
+    legend = { x: maxX + gaps.legendGap, y: minY, w, h, items: chart.legend }
   }
 
   // Headlines render all-caps at size 20 bold; measure that so the accent bar
@@ -431,16 +437,16 @@ function assemble(chart: OrgChart, placed: PlacedNode[], connectors: string[]): 
     chart.meta.showTitle && chart.meta.title.trim()
       ? {
           text: chart.meta.title,
-          x: M.canvasPad,
-          y: M.canvasPad + 22,
+          x: gaps.canvasPad,
+          y: gaps.canvasPad + 22,
           w: textWidth(chart.meta.title.toUpperCase(), 20, true) * TITLE_BAR_SCALE,
         }
       : null
 
   const contentRight = legend ? legend.x + legend.w : maxX
   const titleRight = title ? title.x + title.w : 0
-  const width = Math.max(contentRight, titleRight) + M.canvasPad
-  const height = Math.max(maxY, legend ? legend.y + legend.h : 0) + M.canvasPad
+  const width = Math.max(contentRight, titleRight) + gaps.canvasPad
+  const height = Math.max(maxY, legend ? legend.y + legend.h : 0) + gaps.canvasPad
 
   return { placed, connectors, zones, comms, legend, title, width, height }
 }
@@ -492,7 +498,7 @@ function hierarchyConnectors(chart: OrgChart, placed: PlacedNode[]): string[] {
  */
 export function previewDrag(chart: OrgChart, base: Layout, id: string, x: number, y: number): Layout {
   const placed = base.placed.map((p) => (p.node.id === id ? { ...p, x, y } : p))
-  return assemble(chart, placed, hierarchyConnectors(chart, placed))
+  return assemble(chart, placed, hierarchyConnectors(chart, placed), gapsOf(chart))
 }
 
 /* ------------------------------------------------------------- radial */
@@ -540,10 +546,11 @@ function placeRadial(
 }
 
 function layoutRadial(chart: OrgChart): Layout {
+  const g = gapsOf(chart)
   const placed: PlacedNode[] = []
   const connectors: string[] = []
-  const ox = M.canvasPad
-  const oy = M.canvasPad + (chart.meta.showTitle && chart.meta.title.trim() ? 44 : 0)
+  const ox = g.canvasPad
+  const oy = g.canvasPad + (chart.meta.showTitle && chart.meta.title.trim() ? 44 : 0)
   let clusterLeft = 0
 
   // A box sits at an arbitrary angle on its ring but is never rotated, so its
@@ -552,7 +559,7 @@ function layoutRadial(chart: OrgChart): Layout {
   const halfDiag = (m: Measured) => Math.hypot(m.w, m.totalH) / 2
 
   for (const root of chart.roots) {
-    const m = measureNode(root, true)
+    const m = measureNode(root, true, g)
 
     const nodes: RadialPlaced[] = []
     placeRadial(m, 0, Math.PI * 2, 0, null, nodes)
@@ -574,9 +581,9 @@ function layoutRadial(chart: OrgChart): Layout {
         minGapAt[d] = Math.PI * 2
         continue
       }
-      let g = Math.PI * 2 + angs[0] - angs[angs.length - 1] // wrap-around neighbor
-      for (let i = 1; i < angs.length; i++) g = Math.min(g, angs[i] - angs[i - 1])
-      minGapAt[d] = Math.max(g, 1e-3)
+      let ag = Math.PI * 2 + angs[0] - angs[angs.length - 1] // wrap-around neighbor
+      for (let i = 1; i < angs.length; i++) ag = Math.min(ag, angs[i] - angs[i - 1])
+      minGapAt[d] = Math.max(ag, 1e-3)
     }
     const radii: number[] = [0]
     for (let d = 1; d <= maxDepth; d++) {
@@ -634,10 +641,10 @@ function layoutRadial(chart: OrgChart): Layout {
     }
 
     const clusterW = Math.max(...xe) - minCx
-    clusterLeft += clusterW + M.rootGap
+    clusterLeft += clusterW + g.rootGap
   }
 
-  return assemble(chart, placed, connectors)
+  return assemble(chart, placed, connectors, g)
 }
 
 /* ------------------------------ graph layouts (layered/matrix/swimlane) */
@@ -655,7 +662,7 @@ interface VisibleModel {
 
 /** Shared prep for the graph layouts: visible nodes + measurements, a
  *  nearest-visible-ancestor lookup, and memoized tree depth. */
-function collectVisible(chart: OrgChart): VisibleModel {
+function collectVisible(chart: OrgChart, g: LayoutGaps): VisibleModel {
   const parentOf = new Map<string, OrgNode | null>()
   visit(chart.roots, (n, p) => parentOf.set(n.id, p))
   const visParent = (n: OrgNode): OrgNode | null => {
@@ -665,7 +672,7 @@ function collectVisible(chart: OrgChart): VisibleModel {
   }
   const measured = new Map<string, Measured>()
   for (const r of chart.roots) {
-    const stack: Measured[] = [measureNode(r, true)]
+    const stack: Measured[] = [measureNode(r, true, g)]
     while (stack.length) {
       const x = stack.pop()!
       measured.set(x.node.id, x)
@@ -754,9 +761,10 @@ const LAYERED_SWEEPS = 6
  *  nodes together), so global peers line up and dotted-line relationships read
  *  clearly. Comms are drawn as the cross-layer edges by assemble(). */
 function layoutLayered(chart: OrgChart): Layout {
-  const model = collectVisible(chart)
+  const g = gapsOf(chart)
+  const model = collectVisible(chart, g)
   const { nodes, measured, idset, depth, visParent } = model
-  if (!nodes.length) return assemble(chart, [], [])
+  if (!nodes.length) return assemble(chart, [], [], g)
 
   // Undirected adjacency for barycenter: hierarchy edges + comm cross-links.
   const adj = new Map<string, string[]>()
@@ -779,13 +787,13 @@ function layoutLayered(chart: OrgChart): Layout {
   for (const n of nodes) rows[depth(n)].push(n.id)
 
   // Row Y offsets (each row is as tall as its tallest box).
-  const ox = M.canvasPad
-  const oy = M.canvasPad + (chart.meta.showTitle && chart.meta.title.trim() ? 44 : 0)
+  const ox = g.canvasPad
+  const oy = g.canvasPad + (chart.meta.showTitle && chart.meta.title.trim() ? 44 : 0)
   const rowY: number[] = []
   let yCursor = 0
   for (let L = 0; L <= maxLayer; L++) {
     rowY[L] = yCursor
-    yCursor += Math.max(0, ...rows[L].map((id) => measured.get(id)!.totalH)) + M.levelGap
+    yCursor += Math.max(0, ...rows[L].map((id) => measured.get(id)!.totalH)) + g.levelGap
   }
 
   // Center-x per node: pack each row, then barycenter passes align the layers.
@@ -795,7 +803,7 @@ function layoutLayered(chart: OrgChart): Layout {
     for (const id of row) {
       const w = measured.get(id)!.w
       cx.set(id, x + w / 2)
-      x += w + M.siblingGap
+      x += w + g.siblingGap
     }
   }
   const resolveRow = (row: string[]) => {
@@ -804,13 +812,13 @@ function layoutLayered(chart: OrgChart): Layout {
     for (let i = 1; i < row.length; i++) {
       const a = row[i - 1]
       const b = row[i]
-      const min = cx.get(a)! + measured.get(a)!.w / 2 + M.siblingGap + measured.get(b)!.w / 2
+      const min = cx.get(a)! + measured.get(a)!.w / 2 + g.siblingGap + measured.get(b)!.w / 2
       if (cx.get(b)! < min) cx.set(b, min)
     }
     for (let i = row.length - 2; i >= 0; i--) {
       const a = row[i]
       const b = row[i + 1]
-      const max = cx.get(b)! - measured.get(b)!.w / 2 - M.siblingGap - measured.get(a)!.w / 2
+      const max = cx.get(b)! - measured.get(b)!.w / 2 - g.siblingGap - measured.get(a)!.w / 2
       if (cx.get(a)! > max) cx.set(a, max)
     }
   }
@@ -832,7 +840,7 @@ function layoutLayered(chart: OrgChart): Layout {
   const placed = nodes.map((n) =>
     placeBox(n, measured.get(n.id)!, cx.get(n.id)! - measured.get(n.id)!.w / 2 + shiftX, rowY[depth(n)] + oy),
   )
-  return assemble(chart, placed, hierarchyConnectors(chart, placed))
+  return assemble(chart, placed, hierarchyConnectors(chart, placed), g)
 }
 
 const CELL_GAP = 16
@@ -842,9 +850,10 @@ const COLUMN_GAP = 56
  *  no groups are defined, root subtree). Cells stack their nodes vertically, so
  *  columns stay one box wide and depth reads across the grid. */
 function layoutMatrix(chart: OrgChart): Layout {
-  const model = collectVisible(chart)
+  const g = gapsOf(chart)
+  const model = collectVisible(chart, g)
   const { nodes, measured, depth } = model
-  if (!nodes.length) return assemble(chart, [], [])
+  if (!nodes.length) return assemble(chart, [], [], g)
   const cols = assignColumns(chart, model)
   const colOf = new Map<string, number>()
   cols.forEach((c, ci) => c.ids.forEach((id) => colOf.set(id, ci)))
@@ -869,8 +878,8 @@ function layoutMatrix(chart: OrgChart): Layout {
     rowH[r] = Math.max(0, ...cols.map((_, ci) => cellHeight(cells.get(cell(ci, r)))))
   }
 
-  const ox = M.canvasPad
-  const oy = M.canvasPad + (chart.meta.showTitle && chart.meta.title.trim() ? 44 : 0)
+  const ox = g.canvasPad
+  const oy = g.canvasPad + (chart.meta.showTitle && chart.meta.title.trim() ? 44 : 0)
   const colX: number[] = []
   let xCursor = ox
   for (let ci = 0; ci < cols.length; ci++) {
@@ -881,7 +890,7 @@ function layoutMatrix(chart: OrgChart): Layout {
   let yCursor = oy
   for (let r = 0; r <= maxRow; r++) {
     rowYs[r] = yCursor
-    yCursor += rowH[r] + M.levelGap
+    yCursor += rowH[r] + g.levelGap
   }
 
   const placed: PlacedNode[] = []
@@ -898,20 +907,21 @@ function layoutMatrix(chart: OrgChart): Layout {
       }
     }
   }
-  return assemble(chart, placed, hierarchyConnectors(chart, placed))
+  return assemble(chart, placed, hierarchyConnectors(chart, placed), g)
 }
 
 /** Swimlane layout: one vertical lane per group (or root subtree). Each lane is
  *  an independent top-to-bottom list of its nodes (DFS order); lanes sit side by
  *  side. The group zones render behind as the labeled lane bands. */
 function layoutSwimlane(chart: OrgChart): Layout {
-  const model = collectVisible(chart)
+  const g = gapsOf(chart)
+  const model = collectVisible(chart, g)
   const { nodes, measured } = model
-  if (!nodes.length) return assemble(chart, [], [])
+  if (!nodes.length) return assemble(chart, [], [], g)
   const cols = assignColumns(chart, model)
 
-  const ox = M.canvasPad
-  const oy = M.canvasPad + (chart.meta.showTitle && chart.meta.title.trim() ? 44 : 0)
+  const ox = g.canvasPad
+  const oy = g.canvasPad + (chart.meta.showTitle && chart.meta.title.trim() ? 44 : 0)
   const laneW = cols.map((c) => Math.max(0, ...c.ids.map((id) => measured.get(id)!.w)))
 
   const placed: PlacedNode[] = []
@@ -926,7 +936,7 @@ function layoutSwimlane(chart: OrgChart): Layout {
     }
     xCursor += laneW[ci] + COLUMN_GAP
   }
-  return assemble(chart, placed, hierarchyConnectors(chart, placed))
+  return assemble(chart, placed, hierarchyConnectors(chart, placed), g)
 }
 
 export function layoutChart(chart: OrgChart): Layout {
@@ -936,6 +946,7 @@ export function layoutChart(chart: OrgChart): Layout {
   if (mode === 'matrix') return layoutMatrix(chart)
   if (mode === 'swimlane') return layoutSwimlane(chart)
 
+  const g = gapsOf(chart)
   const dir: Direction = chart.meta.direction ?? 'TB'
   const vertical = dir === 'TB' || dir === 'BT'
 
@@ -944,15 +955,15 @@ export function layoutChart(chart: OrgChart): Layout {
   const rawConns: Polyline[] = []
   let crossCursor = 0
   for (const root of chart.roots) {
-    const m = measureNode(root, vertical)
-    placeNode(m, crossCursor, 0, raw, rawConns)
-    crossCursor += m.subCross + M.rootGap
+    const m = measureNode(root, vertical, g)
+    placeNode(m, crossCursor, 0, raw, rawConns, g)
+    crossCursor += m.subCross + g.rootGap
   }
 
   // 2) Map logical -> screen for the chosen direction. The title always sits at
   //    the top-left, so content is offset down by its height regardless of flow.
-  const ox = M.canvasPad
-  const oy = M.canvasPad + (chart.meta.showTitle && chart.meta.title.trim() ? 44 : 0)
+  const ox = g.canvasPad
+  const oy = g.canvasPad + (chart.meta.showTitle && chart.meta.title.trim() ? 44 : 0)
   const maxMain = raw.reduce((mx, r) => Math.max(mx, r.main + r.m.mainSize), 0)
 
   const mapX = (cross: number, main: number) =>
@@ -987,5 +998,5 @@ export function layoutChart(chart: OrgChart): Layout {
   // Manual position overrides win over the auto layout; when present, connectors
   // are re-routed to follow the moved boxes.
   const moved = applyOverrides(placed)
-  return assemble(chart, placed, moved ? hierarchyConnectors(chart, placed) : connectors)
+  return assemble(chart, placed, moved ? hierarchyConnectors(chart, placed) : connectors, g)
 }
