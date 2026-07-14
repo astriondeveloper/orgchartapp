@@ -5,6 +5,7 @@ import type {
   Direction,
   EdgeArrow,
   EdgeStyle,
+  LayoutMode,
   LegendMarker,
   OrgChart,
   OrgNode,
@@ -61,6 +62,11 @@ const MARKERS: { value: LegendMarker; label: string }[] = [
   { value: 'orange', label: 'Orange zone' },
   { value: 'dashed', label: 'Dashed container' },
   { value: 'comm', label: 'Comm arrow' },
+]
+
+const LAYOUT_MODES: { value: LayoutMode; label: string }[] = [
+  { value: 'tree', label: 'Tree (hierarchy)' },
+  { value: 'radial', label: 'Radial (rings)' },
 ]
 
 const DIRECTIONS: { value: Direction; label: string }[] = [
@@ -292,9 +298,18 @@ function ChartEditor({ chart, onChange, onSelect }: Props) {
         />
         Show title on chart
       </label>
+      <label>Layout
+        <select
+          value={chart.meta.layout ?? 'tree'}
+          onChange={(e) => onChange({ ...chart, meta: { ...chart.meta, layout: e.target.value as LayoutMode } })}
+        >
+          {LAYOUT_MODES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+        </select>
+      </label>
       <label>Flow direction
         <select
           value={chart.meta.direction ?? 'TB'}
+          disabled={(chart.meta.layout ?? 'tree') === 'radial'}
           onChange={(e) => onChange({ ...chart, meta: { ...chart.meta, direction: e.target.value as Direction } })}
         >
           {DIRECTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}

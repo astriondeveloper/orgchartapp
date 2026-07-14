@@ -102,9 +102,13 @@ export interface LegendItem {
 /** Flow direction of the auto-layout: top-down, bottom-up, left-right, right-left. */
 export type Direction = 'TB' | 'BT' | 'LR' | 'RL'
 
+/** Auto-layout strategy. 'tree' is the tidy-tree (with a Direction); 'radial'
+ *  places the root at the center with descendants on concentric rings. */
+export type LayoutMode = 'tree' | 'radial'
+
 export interface OrgChart {
   version: 1
-  meta: { title: string; showTitle: boolean; direction?: Direction }
+  meta: { title: string; showTitle: boolean; direction?: Direction; layout?: LayoutMode }
   /** Independent trees/columns laid out left to right. */
   roots: OrgNode[]
   groups: Group[]
@@ -309,12 +313,15 @@ export function normalizeChart(input: unknown): OrgChart {
   }
   const dir = c.meta?.direction
   const dirOk = dir === 'TB' || dir === 'BT' || dir === 'LR' || dir === 'RL'
+  const layout = c.meta?.layout
+  const layoutOk = layout === 'tree' || layout === 'radial'
   const chart: OrgChart = {
     version: CHART_VERSION,
     meta: {
       title: typeof c.meta?.title === 'string' ? c.meta.title : 'Org Chart',
       showTitle: c.meta?.showTitle !== false,
       ...(dirOk ? { direction: dir } : {}),
+      ...(layoutOk ? { layout } : {}),
     },
     roots: c.roots as OrgNode[],
     groups: Array.isArray(c.groups) ? c.groups : [],

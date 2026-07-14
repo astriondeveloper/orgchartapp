@@ -349,7 +349,219 @@ const LEGEND_PAD = 12
 // noticeable overshoot.
 const TITLE_BAR_SCALE = 0.9
 
+/** Shared tail: build zones, edges, legend, title, and bounds from already
+ *  positioned boxes + connectors. Used by every layout strategy. */
+function assemble(chart: OrgChart, placed: PlacedNode[], connectors: string[]): Layout {
+  // Zones behind member subtrees (computed from final screen rects).
+  const zones: Zone[] = []
+  for (const g of chart.groups) {
+    const ids = new Set<string>()
+    for (const memberId of g.memberIds) {
+      const node = placed.find((p) => p.node.id === memberId)?.node
+      if (node) subtreeIds(node).forEach((i) => ids.add(i))
+    }
+    const boxes = placed.filter((p) => ids.has(p.node.id))
+    if (!boxes.length) continue
+    const x1 = Math.min(...boxes.map((b) => b.x)) - M.zonePad
+    const y1 = Math.min(...boxes.map((b) => b.y)) - M.zonePad
+    const x2 = Math.max(...boxes.map((b) => b.x + b.w)) + M.zonePad
+    const y2 = Math.max(...boxes.map((b) => b.y + b.totalH)) + M.zonePad
+    zones.push({ group: g, rect: { x: x1, y: y1, w: x2 - x1, h: y2 - y1 } })
+  }
+
+  // Edges (communication / graph connections).
+  const comms: CommPath[] = []
+  for (const link of chart.comms) {
+    const a = boxOf(placed, link.fromId)
+    const b = boxOf(placed, link.toId)
+    if (a && b) {
+      const labelPos = {
+        x: (a.x + a.w / 2 + b.x + b.w / 2) / 2,
+        y: (a.y + a.h / 2 + b.y + b.h / 2) / 2,
+      }
+      comms.push({ link, path: routeComm(a, b), labelPos })
+    }
+  }
+
+  // Content bounds.
+  const x2s = placed.map((p) => p.x + p.w).concat(zones.map((z) => z.rect.x + z.rect.w))
+  const y2s = placed.map((p) => p.y + p.totalH).concat(zones.map((z) => z.rect.y + z.rect.h))
+  const ys = placed.map((p) => p.y).concat(zones.map((z) => z.rect.y))
+  const maxX = x2s.length ? Math.max(...x2s) : 400
+  const maxY = y2s.length ? Math.max(...y2s) : 300
+  const minY = ys.length ? Math.min(...ys) : M.canvasPad
+
+  // Legend to the right of content.
+  let legend: LegendLayout | null = null
+  if (chart.legend.length) {
+    const w =
+      Math.max(
+        textWidth('Legend', 12, true),
+        ...chart.legend.map((l) => textWidth(l.label, 11)),
+      ) +
+      LEGEND_PAD * 2 +
+      30
+    const h = LEGEND_PAD * 2 + 18 + chart.legend.length * LEGEND_ITEM_H
+    legend = { x: maxX + M.legendGap, y: minY, w, h, items: chart.legend }
+  }
+
+  // Headlines render all-caps at size 20 bold; measure that so the accent bar
+  // (and the canvas) can size to the actual title width.
+  const title =
+    chart.meta.showTitle && chart.meta.title.trim()
+      ? {
+          text: chart.meta.title,
+          x: M.canvasPad,
+          y: M.canvasPad + 22,
+          w: textWidth(chart.meta.title.toUpperCase(), 20, true) * TITLE_BAR_SCALE,
+        }
+      : null
+
+  const contentRight = legend ? legend.x + legend.w : maxX
+  const titleRight = title ? title.x + title.w : 0
+  const width = Math.max(contentRight, titleRight) + M.canvasPad
+  const height = Math.max(maxY, legend ? legend.y + legend.h : 0) + M.canvasPad
+
+  return { placed, connectors, zones, comms, legend, title, width, height }
+}
+
+/* ------------------------------------------------------------- radial */
+
+/** Clearance (px) kept between adjacent radial boxes, radially and angularly. */
+const RADIAL_GAP = 56
+
+/** Number of leaves under a measured node (its angular weight). */
+function leafCount(m: Measured): number {
+  if (!m.children.length) return 1
+  return m.children.reduce((s, c) => s + leafCount(c), 0)
+}
+
+interface RadialPlaced {
+  m: Measured
+  /** Center angle on its ring (radians). */
+  angle: number
+  cx: number
+  cy: number
+  depth: number
+  parent: RadialPlaced | null
+}
+
+/** Assign each node a center angle: children partition the parent's arc by
+ *  leaf weight, so every leaf ends up with an equal slice of the full circle.
+ *  Radii (and hence cx/cy) are resolved afterward, once all angles are known. */
+function placeRadial(
+  m: Measured,
+  a0: number,
+  a1: number,
+  depth: number,
+  parent: RadialPlaced | null,
+  out: RadialPlaced[],
+): RadialPlaced {
+  const self: RadialPlaced = { m, angle: (a0 + a1) / 2, cx: 0, cy: 0, depth, parent }
+  out.push(self)
+  const total = leafCount(m)
+  let cursor = a0
+  for (const c of m.children) {
+    const span = ((a1 - a0) * leafCount(c)) / total
+    placeRadial(c, cursor, cursor + span, depth + 1, self, out)
+    cursor += span
+  }
+  return self
+}
+
+function layoutRadial(chart: OrgChart): Layout {
+  const placed: PlacedNode[] = []
+  const connectors: string[] = []
+  const ox = M.canvasPad
+  const oy = M.canvasPad + (chart.meta.showTitle && chart.meta.title.trim() ? 44 : 0)
+  let clusterLeft = 0
+
+  // A box sits at an arbitrary angle on its ring but is never rotated, so its
+  // half-diagonal is a rotation-safe bound on how far it reaches in any single
+  // direction — used for both radial and tangential clearance.
+  const halfDiag = (m: Measured) => Math.hypot(m.w, m.totalH) / 2
+
+  for (const root of chart.roots) {
+    const m = measureNode(root, true)
+
+    const nodes: RadialPlaced[] = []
+    placeRadial(m, 0, Math.PI * 2, 0, null, nodes)
+
+    // Ring radii, sized from the ACTUAL geometry so no two boxes touch:
+    //   • radial:  clear the previous ring's boxes and this ring's boxes.
+    //   • angular: the tightest pair of adjacent centers on the ring must span
+    //              both their footprints (radius * minAngleGap >= footprint).
+    let maxDepth = 0
+    const extentAt: number[] = []
+    for (const n of nodes) {
+      maxDepth = Math.max(maxDepth, n.depth)
+      extentAt[n.depth] = Math.max(extentAt[n.depth] ?? 0, halfDiag(n.m))
+    }
+    const minGapAt: number[] = []
+    for (let d = 0; d <= maxDepth; d++) {
+      const angs = nodes.filter((n) => n.depth === d).map((n) => n.angle).sort((p, q) => p - q)
+      if (angs.length < 2) {
+        minGapAt[d] = Math.PI * 2
+        continue
+      }
+      let g = Math.PI * 2 + angs[0] - angs[angs.length - 1] // wrap-around neighbor
+      for (let i = 1; i < angs.length; i++) g = Math.min(g, angs[i] - angs[i - 1])
+      minGapAt[d] = Math.max(g, 1e-3)
+    }
+    const radii: number[] = [0]
+    for (let d = 1; d <= maxDepth; d++) {
+      const radialMin = radii[d - 1] + extentAt[d - 1] + extentAt[d] + RADIAL_GAP
+      const angularMin = (2 * extentAt[d] + RADIAL_GAP) / minGapAt[d]
+      radii[d] = Math.max(radialMin, angularMin)
+    }
+    for (const n of nodes) {
+      n.cx = radii[n.depth] * Math.cos(n.angle)
+      n.cy = radii[n.depth] * Math.sin(n.angle)
+    }
+
+    // Shift this cluster so its bounding box sits at (clusterLeft, 0)+.
+    const xs = nodes.map((n) => n.cx - n.m.w / 2)
+    const ys = nodes.map((n) => n.cy - n.m.totalH / 2)
+    const xe = nodes.map((n) => n.cx + n.m.w / 2)
+    const minCx = Math.min(...xs)
+    const minCy = Math.min(...ys)
+    const shiftX = ox + clusterLeft - minCx
+    const shiftY = oy - minCy
+
+    for (const n of nodes) {
+      if (n.m.node.variant !== 'hidden') {
+        placed.push({
+          node: n.m.node,
+          x: n.cx - n.m.w / 2 + shiftX,
+          y: n.cy - n.m.totalH / 2 + shiftY,
+          w: n.m.w,
+          headerH: n.m.headerH,
+          totalH: n.m.totalH,
+          titleLines: n.m.titleLines,
+          leftAlign: n.m.leftAlign,
+          bulletLines: n.m.bulletLines,
+          detailBlocks: n.m.detailBlocks,
+        })
+      }
+      // Straight spoke from parent center to this node center (hidden under the
+      // opaque boxes, so only the gap between them shows).
+      if (n.parent && n.parent.m.node.variant !== 'hidden' && n.m.node.variant !== 'hidden') {
+        connectors.push(
+          `M ${n.parent.cx + shiftX} ${n.parent.cy + shiftY} L ${n.cx + shiftX} ${n.cy + shiftY}`,
+        )
+      }
+    }
+
+    const clusterW = Math.max(...xe) - minCx
+    clusterLeft += clusterW + M.rootGap
+  }
+
+  return assemble(chart, placed, connectors)
+}
+
 export function layoutChart(chart: OrgChart): Layout {
+  if ((chart.meta.layout ?? 'tree') === 'radial') return layoutRadial(chart)
+
   const dir: Direction = chart.meta.direction ?? 'TB'
   const vertical = dir === 'TB' || dir === 'BT'
 
@@ -398,75 +610,5 @@ export function layoutChart(chart: OrgChart): Layout {
       .join(' '),
   )
 
-  // Zones behind member subtrees (computed from final screen rects).
-  const zones: Zone[] = []
-  for (const g of chart.groups) {
-    const ids = new Set<string>()
-    for (const memberId of g.memberIds) {
-      const node = placed.find((p) => p.node.id === memberId)?.node
-      if (node) subtreeIds(node).forEach((i) => ids.add(i))
-    }
-    const boxes = placed.filter((p) => ids.has(p.node.id))
-    if (!boxes.length) continue
-    const x1 = Math.min(...boxes.map((b) => b.x)) - M.zonePad
-    const y1 = Math.min(...boxes.map((b) => b.y)) - M.zonePad
-    const x2 = Math.max(...boxes.map((b) => b.x + b.w)) + M.zonePad
-    const y2 = Math.max(...boxes.map((b) => b.y + b.totalH)) + M.zonePad
-    zones.push({ group: g, rect: { x: x1, y: y1, w: x2 - x1, h: y2 - y1 } })
-  }
-
-  // Communication-channel arrows.
-  const comms: CommPath[] = []
-  for (const link of chart.comms) {
-    const a = boxOf(placed, link.fromId)
-    const b = boxOf(placed, link.toId)
-    if (a && b) {
-      const labelPos = {
-        x: (a.x + a.w / 2 + b.x + b.w / 2) / 2,
-        y: (a.y + a.h / 2 + b.y + b.h / 2) / 2,
-      }
-      comms.push({ link, path: routeComm(a, b), labelPos })
-    }
-  }
-
-  // Content bounds.
-  const x2s = placed.map((p) => p.x + p.w).concat(zones.map((z) => z.rect.x + z.rect.w))
-  const y2s = placed.map((p) => p.y + p.totalH).concat(zones.map((z) => z.rect.y + z.rect.h))
-  const ys = placed.map((p) => p.y).concat(zones.map((z) => z.rect.y))
-  const maxX = x2s.length ? Math.max(...x2s) : 400
-  const maxY = y2s.length ? Math.max(...y2s) : 300
-  const minY = ys.length ? Math.min(...ys) : oy
-
-  // Legend to the right of content.
-  let legend: LegendLayout | null = null
-  if (chart.legend.length) {
-    const w =
-      Math.max(
-        textWidth('Legend', 12, true),
-        ...chart.legend.map((l) => textWidth(l.label, 11)),
-      ) +
-      LEGEND_PAD * 2 +
-      30
-    const h = LEGEND_PAD * 2 + 18 + chart.legend.length * LEGEND_ITEM_H
-    legend = { x: maxX + M.legendGap, y: minY, w, h, items: chart.legend }
-  }
-
-  // Headlines render all-caps at size 20 bold; measure that so the accent bar
-  // (and the canvas) can size to the actual title width.
-  const title =
-    chart.meta.showTitle && chart.meta.title.trim()
-      ? {
-          text: chart.meta.title,
-          x: M.canvasPad,
-          y: M.canvasPad + 22,
-          w: textWidth(chart.meta.title.toUpperCase(), 20, true) * TITLE_BAR_SCALE,
-        }
-      : null
-
-  const contentRight = legend ? legend.x + legend.w : maxX
-  const titleRight = title ? title.x + title.w : 0
-  const width = Math.max(contentRight, titleRight) + M.canvasPad
-  const height = Math.max(maxY, legend ? legend.y + legend.h : 0) + M.canvasPad
-
-  return { placed, connectors, zones, comms, legend, title, width, height }
+  return assemble(chart, placed, connectors)
 }

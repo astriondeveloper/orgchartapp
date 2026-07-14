@@ -149,3 +149,55 @@ describe('edges', () => {
     expect(layoutChart(chart).comms).toHaveLength(0)
   })
 })
+
+describe('radial layout', () => {
+  const radial = (): OrgChart => ({
+    version: 1,
+    meta: { title: 'R', showTitle: true, layout: 'radial' },
+    roots: [
+      {
+        id: 'root',
+        title: 'Root',
+        variant: 'primary',
+        children: [
+          { id: 'a', title: 'A', variant: 'secondary' },
+          { id: 'b', title: 'B', variant: 'secondary' },
+          { id: 'c', title: 'C', variant: 'secondary' },
+          { id: 'd', title: 'D', variant: 'secondary' },
+        ],
+      },
+    ],
+    groups: [],
+    comms: [],
+    legend: [],
+  })
+
+  it('places every node with finite bounds', () => {
+    const l = layoutChart(radial())
+    expect(l.placed).toHaveLength(5)
+    expect(l.placed.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))).toBe(true)
+    expect(l.width).toBeGreaterThan(0)
+    expect(l.height).toBeGreaterThan(0)
+    expect(l.connectors).toHaveLength(4)
+  })
+
+  it('surrounds the root: children sit on more than one side of it', () => {
+    const l = layoutChart(radial())
+    const root = l.placed.find((p) => p.node.id === 'root')!
+    const rcx = root.x + root.w / 2
+    const rcy = root.y + root.totalH / 2
+    const kids = l.placed.filter((p) => p.node.id !== 'root').map((p) => ({
+      dx: p.x + p.w / 2 - rcx,
+      dy: p.y + p.totalH / 2 - rcy,
+    }))
+    // Radial spreads children around the center, not all on one side.
+    expect(kids.some((k) => k.dx > 0)).toBe(true)
+    expect(kids.some((k) => k.dx < 0)).toBe(true)
+  })
+
+  it('keeps all boxes within the canvas padding', () => {
+    const l = layoutChart(radial())
+    expect(Math.min(...l.placed.map((p) => p.x))).toBeGreaterThanOrEqual(0)
+    expect(Math.min(...l.placed.map((p) => p.y))).toBeGreaterThanOrEqual(0)
+  })
+})
