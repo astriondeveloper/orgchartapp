@@ -36,7 +36,7 @@ function badgeGlyphs(p: PlacedNode): JSX.Element[] {
           key={`${p.node.id}-${b}`}
           x={right}
           y={p.y + 5}
-          color={b === 'keyGold' ? brand.gold : '#C9D2DD'}
+          color={b === 'keyGold' ? brand.keyGold : '#D7DDE4'}
         />,
       )
       right -= 20
@@ -45,7 +45,7 @@ function badgeGlyphs(p: PlacedNode): JSX.Element[] {
         <path
           key={`${p.node.id}-corner`}
           d={`M ${p.x} ${p.y} h 15 L ${p.x} ${p.y + 15} Z`}
-          fill={brand.orange}
+          fill={brand.marker}
         />,
       )
     }
@@ -103,7 +103,7 @@ function NodeBox({ p, selected, onSelect }: { p: PlacedNode; selected: boolean; 
         y1={cursorY - M.titleLineH + 9}
         x2={p.x + p.w - padX}
         y2={cursorY - M.titleLineH + 9}
-        stroke="rgba(255,255,255,0.45)"
+        stroke={v.text === brand.white ? 'rgba(255,255,255,0.45)' : 'rgba(34,34,48,0.3)'}
         strokeWidth={1}
       />,
     )
@@ -219,7 +219,7 @@ function NodeBox({ p, selected, onSelect }: { p: PlacedNode; selected: boolean; 
           height={p.totalH + 6}
           rx={M.boxRadius + 2}
           fill="none"
-          stroke={brand.orange}
+          stroke={brand.marker}
           strokeWidth={2}
           strokeDasharray="5 3"
         />
@@ -231,11 +231,11 @@ function NodeBox({ p, selected, onSelect }: { p: PlacedNode; selected: boolean; 
 function LegendMarkerGlyph({ marker, x, y }: { marker: LegendMarker; x: number; y: number }) {
   switch (marker) {
     case 'keyGold':
-      return <KeyIcon x={x} y={y + 3} color={brand.gold} />
+      return <KeyIcon x={x} y={y + 3} color={brand.keyGold} />
     case 'keyGray':
-      return <KeyIcon x={x} y={y + 3} color={brand.gray} />
+      return <KeyIcon x={x} y={y + 3} color={brand.keyGray} />
     case 'cornerAccent':
-      return <path d={`M ${x} ${y} h 14 L ${x} ${y + 14} Z`} fill={brand.orange} />
+      return <path d={`M ${x} ${y} h 14 L ${x} ${y + 14} Z`} fill={brand.marker} />
     case 'boxPrimary':
     case 'boxSecondary':
     case 'boxTertiary':
@@ -246,7 +246,7 @@ function LegendMarkerGlyph({ marker, x, y }: { marker: LegendMarker; x: number; 
     case 'green':
     case 'blue':
     case 'orange':
-      return <rect x={x} y={y} width={16} height={14} fill={zoneFill[marker]} stroke="#C6CFDA" strokeWidth={0.5} />
+      return <rect x={x} y={y} width={16} height={14} fill={zoneFill[marker]} stroke="#BDBDBD" strokeWidth={0.5} />
     case 'dashed':
       return (
         <rect x={x} y={y} width={16} height={14} fill="none" stroke={brand.zoneDash} strokeWidth={1.5} strokeDasharray="4 3" />
@@ -276,6 +276,11 @@ export function ChartSvg({ layout, selectedId, onSelect }: Props) {
         <marker id="commArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto-start-reverse">
           <path d="M 0 0 L 7 4 L 0 8 Z" fill={brand.comm} />
         </marker>
+        <linearGradient id="skyGradient" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor={brand.skyGradient[0]} />
+          <stop offset="50%" stopColor={brand.skyGradient[1]} />
+          <stop offset="100%" stopColor={brand.skyGradient[2]} />
+        </linearGradient>
       </defs>
       <rect x={0} y={0} width={width} height={height} fill={brand.canvasBg} />
 
@@ -322,7 +327,7 @@ export function ChartSvg({ layout, selectedId, onSelect }: Props) {
                 y={z.rect.y + z.rect.h - 8}
                 fontSize={12}
                 fontWeight={700}
-                fill={brand.navy}
+                fill={brand.heading}
                 fontFamily={brand.fontFamily}
               >
                 {z.group.label}
@@ -363,7 +368,7 @@ export function ChartSvg({ layout, selectedId, onSelect }: Props) {
             width={legend.w}
             height={legend.h}
             fill={brand.white}
-            stroke="#C6CFDA"
+            stroke="#BDBDBD"
             strokeWidth={1}
             rx={4}
           />
@@ -372,7 +377,7 @@ export function ChartSvg({ layout, selectedId, onSelect }: Props) {
             y={legend.y + 20}
             fontSize={12}
             fontWeight={700}
-            fill={brand.navy}
+            fill={brand.heading}
             fontFamily={brand.fontFamily}
           >
             Legend
@@ -398,16 +403,21 @@ export function ChartSvg({ layout, selectedId, onSelect }: Props) {
       )}
 
       {title && (
-        <text
-          x={title.x}
-          y={title.y}
-          fontSize={20}
-          fontWeight={700}
-          fill={brand.navy}
-          fontFamily={brand.fontFamily}
-        >
-          {title.text}
-        </text>
+        <g>
+          {/* Headlines are all-caps per the Astrion brand standards. */}
+          <text
+            x={title.x}
+            y={title.y}
+            fontSize={20}
+            fontWeight={700}
+            fill={brand.heading}
+            fontFamily={brand.fontFamily}
+          >
+            {title.text.toUpperCase()}
+          </text>
+          {/* Sky-gradient bar (Refraction first, per the brand standards). */}
+          <rect x={title.x} y={title.y + 8} width={190} height={4} fill="url(#skyGradient)" />
+        </g>
       )}
     </svg>
   )

@@ -1,12 +1,18 @@
 :root {
-  --navy: #0c2340;
-  --blue: #1d4f91;
-  --light-blue: #4a90d2;
-  --orange: #f05323;
-  --panel-bg: #f5f7fa;
-  --border: #d7dee8;
-  --text: #1c2837;
-  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  /* Astrion Brand Standards (Dec 2023 V.1) */
+  --force: #442c81;
+  --sky: #29aae1;
+  --refraction: #1ed872;
+  --daylight: #4dd3f7;
+  --zenith: #9382f9;
+  --midnight: #222230;
+  --supernova: #ffaf2e;
+  --twilight: #fc5442;
+  --water: #307eef;
+  --panel-bg: #f5f6f8;
+  --border: #dddddd;
+  --text: #222230;
+  font-family: Obvia, Verdana, Geneva, Arial, sans-serif;
   color: var(--text);
 }
 
@@ -34,9 +40,12 @@ body,
   align-items: center;
   gap: 8px;
   padding: 8px 14px;
-  background: var(--navy);
+  background: var(--midnight);
   color: #fff;
   flex-wrap: wrap;
+  /* Astrion Sky-gradient bar (Refraction first, per the brand standards). */
+  border-bottom: 3px solid;
+  border-image: linear-gradient(90deg, var(--refraction), var(--daylight), var(--zenith)) 1;
 }
 
 .brand {
@@ -49,11 +58,8 @@ body,
 }
 
 .brand-mark {
-  width: 14px;
-  height: 14px;
-  background: var(--orange);
-  clip-path: polygon(50% 0, 100% 100%, 0 100%);
-  display: inline-block;
+  display: inline-flex;
+  line-height: 0;
 }
 
 .toolbar button,
@@ -160,8 +166,8 @@ body,
 }
 
 .tabs button.active {
-  color: var(--navy);
-  border-bottom-color: var(--orange);
+  color: var(--force);
+  border-bottom-color: var(--sky);
 }
 
 .tree {
@@ -190,7 +196,7 @@ body,
 }
 
 .tree-row.selected {
-  background: #fdeae2;
+  background: #e8f9fe;
 }
 
 .tree-title {
@@ -206,10 +212,10 @@ body,
   flex-shrink: 0;
 }
 
-.dot-primary { background: var(--navy); }
-.dot-secondary { background: var(--blue); }
-.dot-tertiary { background: var(--light-blue); }
-.dot-accent { background: var(--orange); }
+.dot-primary { background: var(--force); }
+.dot-secondary { background: var(--sky); }
+.dot-tertiary { background: var(--daylight); }
+.dot-accent { background: var(--supernova); }
 .dot-hidden { background: none; border: 1px dashed #9aa5b1; }
 
 /* ------------------------------------------------------------- editor */
@@ -254,7 +260,7 @@ body,
 }
 
 .editor button {
-  background: var(--blue);
+  background: var(--force);
   color: #fff;
   border: none;
   border-radius: 5px;
@@ -265,7 +271,7 @@ body,
 }
 
 .editor button:hover:not(:disabled) {
-  background: var(--navy);
+  background: var(--midnight);
 }
 
 .editor button:disabled {
@@ -308,7 +314,7 @@ body,
 .editor fieldset legend {
   font-size: 11.5px;
   font-weight: 700;
-  color: var(--navy);
+  color: var(--force);
   padding: 0 4px;
 }
 
@@ -324,7 +330,7 @@ body,
 }
 
 .detail-row .arrow {
-  color: var(--blue);
+  color: var(--water);
   font-weight: 700;
 }
 

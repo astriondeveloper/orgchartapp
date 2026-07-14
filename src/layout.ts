@@ -69,16 +69,18 @@ export interface Layout {
 const NARROW = new Set([...`iIljtfr.,;:!'"()[]|/ `])
 const WIDE = new Set([...'mwMW@%&'])
 
+// Average glyph widths tuned for Verdana (the brand-standard fallback for
+// Obvia), which runs wider than most UI fonts.
 export function textWidth(s: string, size: number, bold = false): number {
   let w = 0
   for (const ch of s) {
-    if (NARROW.has(ch)) w += 0.32
-    else if (WIDE.has(ch)) w += 0.88
-    else if (ch >= 'A' && ch <= 'Z') w += 0.72
-    else if (ch >= '0' && ch <= '9') w += 0.58
-    else w += 0.53
+    if (NARROW.has(ch)) w += 0.36
+    else if (WIDE.has(ch)) w += 0.98
+    else if (ch >= 'A' && ch <= 'Z') w += 0.78
+    else if (ch >= '0' && ch <= '9') w += 0.64
+    else w += 0.58
   }
-  return w * size * (bold ? 1.07 : 1)
+  return w * size * (bold ? 1.09 : 1)
 }
 
 export function wrapText(text: string, size: number, maxW: number, bold = false): string[] {

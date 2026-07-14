@@ -48,14 +48,25 @@ volumes or authors.
 
 ## Branding
 
-Every color, font, and layout metric lives in **`src/theme.ts`**. The editor only
-exposes semantic styles (Primary navy / Secondary blue / Tertiary light blue /
-Accent orange), so charts cannot go off-brand.
+Every color, font, and layout metric lives in **`src/theme.ts`**, with values
+taken from the official **Astrion Brand Standards (December 2023, V.1)**:
 
-> The build environment could not reach astrion.us, so the palette is a close
-> professional approximation of the Astrion identity. To make it exact, paste the
-> hex values from the Astrion brand guide into `src/theme.ts` — every box, badge,
-> zone, and legend updates automatically.
+- **Primary:** Astrion Force `#442C81`, Astrion Sky `#29AAE1`
+- **Secondary:** Refraction `#1ED872`, Daylight `#4DD3F7`, Zenith `#9382F9`,
+  Midnight `#222230`, Platinum `#DDDDDD`, Silver `#BDBDBD`
+- **Tertiary (highlights only):** Supernova `#FFAF2E`, Twilight `#FC5442`,
+  Water `#307EEF`, Alabaster `#F1E9DB`
+- **Sky gradient** (always starting with Refraction green): used for the
+  title bar accent, per the graphic-elements guidance
+- **Typography:** Obvia is Astrion's primary typeface; the app falls back to
+  Verdana per the brand standards, since Obvia is a licensed font. Chart
+  headlines render in all-caps per the type hierarchy.
+
+The editor only exposes semantic styles (Primary Force / Secondary Sky /
+Tertiary Daylight / Accent Supernova), so charts cannot go off-brand. Box
+variants map to: Force + white text, Sky + white text, Daylight + Midnight
+text, and Supernova + Midnight text; corner markers use Twilight; key badges
+use Supernova (gold) and Silver (gray).
 
 ## Chart model (JSON)
 

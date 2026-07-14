@@ -18,7 +18,7 @@ import {
   uid,
   updateNode,
 } from './model'
-import { brand } from './theme'
+import { palette } from './theme'
 import type { ZoneStyle } from './theme'
 
 interface Props {
@@ -29,27 +29,27 @@ interface Props {
 }
 
 const VARIANTS: { value: Variant; label: string }[] = [
-  { value: 'primary', label: 'Primary (navy)' },
-  { value: 'secondary', label: 'Secondary (blue)' },
-  { value: 'tertiary', label: 'Tertiary (light blue)' },
-  { value: 'accent', label: 'Accent (orange)' },
+  { value: 'primary', label: 'Primary (Astrion Force purple)' },
+  { value: 'secondary', label: 'Secondary (Astrion Sky blue)' },
+  { value: 'tertiary', label: 'Tertiary (Daylight light blue)' },
+  { value: 'accent', label: 'Accent (Supernova orange)' },
   { value: 'hidden', label: 'Invisible container' },
 ]
 
 const BADGES: { value: BadgeType; label: string }[] = [
   { value: 'keyGold', label: 'Gold key (RFP Required)' },
   { value: 'keyGray', label: 'Gray key (Company Designated)' },
-  { value: 'cornerAccent', label: 'Orange corner marker' },
+  { value: 'cornerAccent', label: 'Corner marker (Twilight)' },
 ]
 
 const MARKERS: { value: LegendMarker; label: string }[] = [
   { value: 'keyGold', label: 'Gold key' },
   { value: 'keyGray', label: 'Gray key' },
   { value: 'cornerAccent', label: 'Corner marker' },
-  { value: 'boxPrimary', label: 'Navy box' },
-  { value: 'boxSecondary', label: 'Blue box' },
-  { value: 'boxTertiary', label: 'Light blue box' },
-  { value: 'boxAccent', label: 'Orange box' },
+  { value: 'boxPrimary', label: 'Force (purple) box' },
+  { value: 'boxSecondary', label: 'Sky (blue) box' },
+  { value: 'boxTertiary', label: 'Daylight (light blue) box' },
+  { value: 'boxAccent', label: 'Supernova (orange) box' },
   { value: 'green', label: 'Green zone' },
   { value: 'blue', label: 'Blue zone' },
   { value: 'orange', label: 'Orange zone' },
@@ -367,15 +367,19 @@ function ChartEditor({ chart, onChange, onSelect }: Props) {
       </fieldset>
 
       <fieldset>
-        <legend>Brand palette (locked)</legend>
+        <legend>Astrion brand palette (locked)</legend>
         <div className="swatches">
           {(
             [
-              ['Navy', brand.navy],
-              ['Blue', brand.blue],
-              ['Light blue', brand.lightBlue],
-              ['Orange', brand.orange],
-              ['Gold', brand.gold],
+              ['Force', palette.force],
+              ['Sky', palette.sky],
+              ['Refraction', palette.refraction],
+              ['Daylight', palette.daylight],
+              ['Zenith', palette.zenith],
+              ['Midnight', palette.midnight],
+              ['Supernova', palette.supernova],
+              ['Twilight', palette.twilight],
+              ['Water', palette.water],
             ] as const
           ).map(([label, color]) => (
             <div key={label} className="swatch">
@@ -384,7 +388,10 @@ function ChartEditor({ chart, onChange, onSelect }: Props) {
             </div>
           ))}
         </div>
-        <p className="hint">Edit <code>src/theme.ts</code> to update brand tokens globally.</p>
+        <p className="hint">
+          Colors per the Astrion Brand Standards (Dec 2023 V.1). Edit <code>src/theme.ts</code> to
+          update tokens globally.
+        </p>
       </fieldset>
     </div>
   )

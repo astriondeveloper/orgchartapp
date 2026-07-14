@@ -109,8 +109,14 @@ export default function App() {
     <div className="app">
       <header className="toolbar">
         <div className="brand">
-          <span className="brand-mark" />
-          <strong>Astrion</strong>&nbsp;Org Chart Builder
+          <span className="brand-mark">
+            {/* Simplified two-triangle mark in Astrion Sky + Force. */}
+            <svg width="20" height="15" viewBox="0 0 20 15" aria-hidden="true">
+              <polygon points="0,0 13,0 0,11" fill="#29AAE1" />
+              <polygon points="20,0 20,15 2,15" fill="#442C81" />
+            </svg>
+          </span>
+          <strong>ASTRION</strong>&nbsp;Org Chart Builder
         </div>
 
         <select

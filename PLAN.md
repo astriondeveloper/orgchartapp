@@ -55,12 +55,13 @@ groupings, legends).
 
 ## Branding note
 
-`astrion.us` is not reachable from this build environment, so `src/theme.ts`
-ships with a close professional approximation of the Astrion palette (deep
-space navy, signature orange accent, supporting blues, neutral grays). All
-values are defined once in that file with comments — paste the exact hex codes
-from the Astrion brand guide there and every chart, badge, zone and legend
-updates automatically.
+`src/theme.ts` encodes the official Astrion Brand Standards (December 2023,
+V.1): primary Astrion Force `#442C81` / Astrion Sky `#29AAE1`, the secondary
+palette (Refraction, Daylight, Zenith, Midnight, Platinum, Silver), tertiary
+highlight colors (Supernova, Twilight, Water, Alabaster), the Sky gradient
+(Refraction-first), all-caps headlines, and Obvia typography with the
+brand-approved Verdana fallback. All values are defined once in that file, so
+any future brand refresh is a one-file change.
 
 ## Milestones
 
