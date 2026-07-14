@@ -2,7 +2,7 @@ import type { OrgChart } from './model'
 
 /* Export helpers: standalone SVG, high-DPI PNG, and chart JSON. */
 
-function download(blob: Blob, filename: string): void {
+export function download(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -11,7 +11,7 @@ function download(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url)
 }
 
-function safeName(title: string): string {
+export function safeName(title: string): string {
   return (title.trim() || 'org-chart').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
@@ -27,7 +27,13 @@ export function exportSvg(svgEl: SVGSVGElement, title: string): void {
   download(new Blob([svgMarkup(svgEl)], { type: 'image/svg+xml' }), `${safeName(title)}.svg`)
 }
 
-export function exportPng(svgEl: SVGSVGElement, title: string, scale: number): Promise<void> {
+/** Rasterize the chart SVG to a PNG blob at the given scale. Returns the blob
+ *  plus the chart's native (unscaled) pixel size, for callers that need the
+ *  aspect ratio (e.g. PPTX slide placement). */
+export function svgToPngBlob(
+  svgEl: SVGSVGElement,
+  scale: number,
+): Promise<{ blob: Blob; width: number; height: number }> {
   return new Promise((resolve, reject) => {
     const width = svgEl.viewBox.baseVal.width || svgEl.clientWidth
     const height = svgEl.viewBox.baseVal.height || svgEl.clientHeight
@@ -49,12 +55,8 @@ export function exportPng(svgEl: SVGSVGElement, title: string, scale: number): P
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
       URL.revokeObjectURL(url)
       canvas.toBlob((blob) => {
-        if (blob) {
-          download(blob, `${safeName(title)}@${scale}x.png`)
-          resolve()
-        } else {
-          reject(new Error('PNG encoding failed'))
-        }
+        if (blob) resolve({ blob, width, height })
+        else reject(new Error('PNG encoding failed'))
       }, 'image/png')
     }
     img.onerror = () => {
@@ -62,6 +64,12 @@ export function exportPng(svgEl: SVGSVGElement, title: string, scale: number): P
       reject(new Error('SVG rasterization failed'))
     }
     img.src = url
+  })
+}
+
+export function exportPng(svgEl: SVGSVGElement, title: string, scale: number): Promise<void> {
+  return svgToPngBlob(svgEl, scale).then(({ blob }) => {
+    download(blob, `${safeName(title)}@${scale}x.png`)
   })
 }
 
