@@ -913,18 +913,8 @@ function spg(): OrgChart {
   const vp = (name: string, role: string): OrgNode =>
     pillarBox(name, role, { width: 170, photo: true })
 
-  // Tier 3 — functional VPs; tier 4 — business-development (BDE) VPs. The
-  // reference chart shows these as two rows below the senior leaders; the exact
-  // reporting is approximate and meant to be adjusted per use.
-  const functional: OrgNode[] = [
-    vp('Rob Dumont', 'SVP, Campaigns Lead'),
-    vp('Jason Galindo', 'VP, LCMWC Campaign Lead'),
-    vp('Peter Weilbach', 'VP, Capture'),
-    vp('Helene Courard', 'VP, Proposals'),
-    vp('Christine Fuentes', 'VP, Marketing and Communications'),
-    vp('Kristin Estok', 'VP, Business Operations'),
-  ]
-  const bde: OrgNode[] = [
+  // All campaign / BDE leads roll up under the Campaigns Lead (Rob Dumont).
+  const campaigns: OrgNode[] = [
     vp('Scott King', 'VP, Army BDE'),
     vp('Bobby Brown', 'VP, Navy/MDA BDE'),
     vp('James Dennis', 'VP, USAF BDE'),
@@ -933,6 +923,9 @@ function spg(): OrgChart {
     node({ title: 'TBD', name: 'VP, FedCiv BDE / Campaign Lead', variant: 'tertiary', width: 170 }),
     node({ title: 'TBA', name: 'VP, International BDE', variant: 'tertiary', width: 170 }),
   ]
+  const robDumont = senior('Rob Dumont', 'SVP, Campaigns Lead')
+  robDumont.children = campaigns
+
   const advisorBoard = node({
     title: 'Industry Advisor Board',
     variant: 'secondary',
@@ -947,11 +940,8 @@ function spg(): OrgChart {
     ],
   })
 
-  const travis = senior('Travis Hite', 'SVP, Engineering & Chief Platform Architect')
-  travis.children = functional
-  const roger = senior('Roger Kylin', 'VP, Systems Engineering Group')
-  roger.children = bde
-
+  // Functional VPs report directly to the President; all campaigns roll up
+  // under Rob Dumont (Campaigns Lead).
   return {
     version: 1,
     meta: { title: 'SPG Organizational Structure', showTitle: true },
@@ -965,8 +955,14 @@ function spg(): OrgChart {
         children: [
           senior('Sara Beth Perrin', 'Executive Assistant'),
           senior('Shane Turner', 'SVP, AI Initiative'),
-          travis,
-          roger,
+          senior('Travis Hite', 'SVP, Engineering & Chief Platform Architect'),
+          senior('Roger Kylin', 'VP, Systems Engineering Group'),
+          robDumont,
+          vp('Jason Galindo', 'VP, LCMWC Campaign Lead'),
+          vp('Peter Weilbach', 'VP, Capture'),
+          vp('Helene Courard', 'VP, Proposals'),
+          vp('Christine Fuentes', 'VP, Marketing and Communications'),
+          vp('Kristin Estok', 'VP, Business Operations'),
           advisorBoard,
         ],
       }),
