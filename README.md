@@ -36,6 +36,17 @@ Your working chart autosaves to localStorage.
      column, a program-leadership chain, delivery-staff functional leads, and corporate resources.
    - **PMO** — corporate and customer columns with two-way communication-channel arrows
      and a dashed PMO container.
+   - **Astrion mission-pillar structures** — a set of Astrion organizational charts:
+     Executive Leadership Team; Mission Solutions (the mission-pillar overview, with a
+     tinted "Mission Areas" zone and a "Campaign & Functional Support" zone); and one
+     chart per mission pillar — Space Warfighting, Exploration & Lunar Presence,
+     Life Cycle Management & Cyber, Integrated Air & Missile Defense, Layered Defense /
+     Autonomous Warfare / Integrated Fires, and Critical Infrastructure Protection —
+     plus the SPG organization. Each pillar chart follows a leader → Solutions Lead /
+     Campaign Lead → portfolio-row pattern, with contract-vehicle references listed as
+     bullets where applicable. Because the tool is brand-locked, the source white boxes
+     are mapped onto Astrion variants (leader → Force, leads → Sky, portfolios →
+     Daylight). Names and titles are starting points — edit them per proposal.
 2. **Click any box** (in the chart or the tree) to edit its title, person name,
    style, bullets, detail rows, badges, photo placeholder, and width.
    Add children/siblings, reorder, or delete from the same panel.

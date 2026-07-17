@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { allNodes } from './model'
+import { allNodes, normalizeChart } from './model'
+import { layoutChart } from './layout'
 import { templates } from './templates'
 
 describe('templates', () => {
@@ -29,6 +30,35 @@ describe('templates', () => {
       expect(typeof l.label).toBe('string')
     }
   })
+
+  it.each(templates.map((t) => [t.key, t] as const))(
+    '%s normalizes and lays out with finite geometry',
+    (_key, t) => {
+      // Round-trip through normalizeChart the way load / import / the JSON tab
+      // does, then run the real layout engine and check the geometry is sane.
+      const chart = normalizeChart(JSON.parse(JSON.stringify(t.build())))
+      const layout = layoutChart(chart)
+
+      expect(Number.isFinite(layout.width) && layout.width > 0).toBe(true)
+      expect(Number.isFinite(layout.height) && layout.height > 0).toBe(true)
+      // Every drawn node is placed; 'hidden' containers draw no box and so are
+      // intentionally absent from the placed list.
+      const drawn = allNodes(chart).filter(({ node }) => node.variant !== 'hidden').length
+      expect(layout.placed.length).toBe(drawn)
+      for (const p of layout.placed) {
+        for (const v of [p.x, p.y, p.w, p.headerH, p.totalH]) {
+          expect(Number.isFinite(v)).toBe(true)
+        }
+        expect(p.w).toBeGreaterThan(0)
+        expect(p.totalH).toBeGreaterThan(0)
+      }
+      for (const z of layout.zones) {
+        for (const v of [z.rect.x, z.rect.y, z.rect.w, z.rect.h]) {
+          expect(Number.isFinite(v)).toBe(true)
+        }
+      }
+    },
+  )
 
   it('exposes the default template key', async () => {
     const { DEFAULT_TEMPLATE_KEY } = await import('./templates')
