@@ -65,6 +65,11 @@ const MARKERS: { value: LegendMarker; label: string }[] = [
   { value: 'green', label: 'Green zone' },
   { value: 'blue', label: 'Blue zone' },
   { value: 'orange', label: 'Orange zone' },
+  { value: 'purple', label: 'Purple zone' },
+  { value: 'red', label: 'Red zone' },
+  { value: 'gray', label: 'Gray zone' },
+  { value: 'water', label: 'Water-blue zone' },
+  { value: 'teal', label: 'Teal zone' },
   { value: 'dashed', label: 'Dashed container' },
   { value: 'comm', label: 'Comm arrow' },
 ]
@@ -105,6 +110,11 @@ const ZONE_STYLES: { value: ZoneStyle; label: string }[] = [
   { value: 'green', label: 'Tint — green' },
   { value: 'blue', label: 'Tint — blue' },
   { value: 'orange', label: 'Tint — orange' },
+  { value: 'purple', label: 'Tint — purple' },
+  { value: 'red', label: 'Tint — red' },
+  { value: 'gray', label: 'Tint — gray' },
+  { value: 'water', label: 'Tint — water blue' },
+  { value: 'teal', label: 'Tint — teal' },
   { value: 'dashed', label: 'Dashed container' },
 ]
 
@@ -547,6 +557,54 @@ function ChartEditor({ chart, onChange, onSelect }: Props) {
             onChange({ ...chart, legend: [...chart.legend, { id: uid('l'), marker: 'keyGold', label: 'RFP Required' }] })
           }
         >+ Legend item</button>
+      </fieldset>
+
+      <fieldset>
+        <legend>Glossary / terms</legend>
+        <label>Panel heading
+          <input
+            value={chart.meta.glossaryTitle ?? ''}
+            placeholder="Glossary"
+            onChange={(e) =>
+              onChange({ ...chart, meta: { ...chart.meta, glossaryTitle: e.target.value || undefined } })
+            }
+          />
+        </label>
+        {(chart.glossary ?? []).map((t, ti) => (
+          <div key={t.id} className="card">
+            <div className="detail-row">
+              <input
+                className="detail-label"
+                value={t.term}
+                placeholder="LCAT"
+                onChange={(e) => {
+                  const glossary = clone(chart.glossary ?? [])
+                  glossary[ti] = { ...glossary[ti], term: e.target.value }
+                  onChange({ ...chart, glossary })
+                }}
+              />
+              <input
+                className="detail-text"
+                value={t.definition}
+                placeholder="Labor Category"
+                onChange={(e) => {
+                  const glossary = clone(chart.glossary ?? [])
+                  glossary[ti] = { ...glossary[ti], definition: e.target.value }
+                  onChange({ ...chart, glossary })
+                }}
+              />
+              <button
+                className="danger sm"
+                onClick={() => onChange({ ...chart, glossary: (chart.glossary ?? []).filter((x) => x.id !== t.id) })}
+              >×</button>
+            </div>
+          </div>
+        ))}
+        <button
+          onClick={() =>
+            onChange({ ...chart, glossary: [...(chart.glossary ?? []), { id: uid('t'), term: '', definition: '' }] })
+          }
+        >+ Term</button>
       </fieldset>
 
       <fieldset>

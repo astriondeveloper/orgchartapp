@@ -60,9 +60,12 @@ Your working chart autosaves to localStorage.
    position are saved in the chart JSON, so a laid-out chart reopens identically.
    Drag the divider between the side panel and the canvas to **resize the panel**
    (double-click it to reset); the width is remembered between sessions.
-3. **Chart tab** — chart title, group zones (tinted or dashed, pick member boxes),
-   communication lines between any two boxes, legend items, and extra
-   independent trees/columns.
+3. **Chart tab** — chart title, group zones (eight brand tints — green, blue,
+   orange, purple, red, gray, water, teal — or a dashed container, pick member
+   boxes; the zone label sits clear of the boxes it wraps),
+   communication lines between any two boxes, legend items, a **glossary / terms**
+   panel (define the acronyms and LCATs used on the chart; rename the heading to
+   "Acronyms", "Key Terms", etc.), and extra independent trees/columns.
 4. **Export** — `Export SVG` (drops straight into PowerPoint/Word and stays
    razor-sharp), `PNG 2×` / `PNG 4×` for high-DPI raster placement, and
    `Save JSON` to store the chart definition alongside the proposal so it can be
@@ -130,6 +133,9 @@ use Supernova (gold) and Silver (gray).
   ],
   "legend": [
     { "id": "l1", "marker": "keyGold", "label": "RFP Required" }
+  ],
+  "glossary": [                         // term / definition panel (acronym key)
+    { "id": "t1", "term": "LCAT", "definition": "Labor Category" }
   ]
 }
 ```
@@ -146,6 +152,9 @@ Tips:
   edge handle) when a box needs to carry more or less text. `height` is optional
   and only grows a box past the space its content needs — useful to line up box
   heights across a row. Both default to auto when omitted.
+- The `glossary` array renders a term/definition panel in the chart's right rail
+  (below the legend when both are present). Set `meta.glossaryTitle` to rename its
+  heading (e.g. "Acronyms"); it defaults to "Glossary". Empty entries are dropped.
 
 ## Project layout
 

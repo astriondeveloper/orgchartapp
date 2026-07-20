@@ -44,10 +44,16 @@ export const brand = {
   /** Detail row text. */
   detailText: palette.midnight,
 
-  /** Group-zone tints (light washes of Refraction / Daylight / Supernova). */
-  zoneGreen: '#E2F9EC',
-  zoneBlue: '#E8F9FE',
-  zoneOrange: '#FFF3DE',
+  /** Group-zone tints — light, high-value washes of the Astrion palette so a
+   *  zone reads as a soft background and dark heading text stays legible. */
+  zoneGreen: '#E2F9EC', // Refraction
+  zoneBlue: '#E8F9FE', // Daylight
+  zoneOrange: '#FFF3DE', // Supernova
+  zonePurple: '#ECEAFC', // Zenith
+  zoneRed: '#FFE7E3', // Twilight
+  zoneGray: '#EEEFF2', // Platinum / Silver
+  zoneWater: '#E6EEFD', // Water
+  zoneTeal: '#E2F7F4', // Sky-leaning teal
   /** Dashed container border. */
   zoneDash: palette.force,
 
@@ -160,10 +166,24 @@ export const layoutGaps: Record<'comfortable' | 'compact', LayoutGaps> = {
   },
 }
 
-export type ZoneStyle = 'green' | 'blue' | 'orange' | 'dashed'
+export type ZoneStyle =
+  | 'green'
+  | 'blue'
+  | 'orange'
+  | 'purple'
+  | 'red'
+  | 'gray'
+  | 'water'
+  | 'teal'
+  | 'dashed'
 
 export const zoneFill: Record<Exclude<ZoneStyle, 'dashed'>, string> = {
   green: brand.zoneGreen,
   blue: brand.zoneBlue,
   orange: brand.zoneOrange,
+  purple: brand.zonePurple,
+  red: brand.zoneRed,
+  gray: brand.zoneGray,
+  water: brand.zoneWater,
+  teal: brand.zoneTeal,
 }

@@ -68,6 +68,18 @@ export interface LegendLayout {
   items: LegendItem[]
 }
 
+export interface GlossaryLayout {
+  x: number
+  y: number
+  w: number
+  h: number
+  /** Panel heading (e.g. "Glossary" / "Acronyms"). */
+  title: string
+  /** Pre-positioned text lines. The first `boldLen` chars of a line render bold
+   *  (the term); wrapped continuation lines carry boldLen 0. */
+  lines: { text: string; boldLen: number; y: number }[]
+}
+
 export interface Layout {
   placed: PlacedNode[]
   /** Reporting-line connector paths. */
@@ -75,6 +87,7 @@ export interface Layout {
   zones: Zone[]
   comms: CommPath[]
   legend: LegendLayout | null
+  glossary: GlossaryLayout | null
   title: { text: string; x: number; y: number; w: number } | null
   width: number
   height: number
@@ -364,6 +377,16 @@ function routeComm(a: Rect, b: Rect): string {
 const LEGEND_ITEM_H = 24
 const LEGEND_PAD = 12
 
+/** Glossary panel geometry (a fixed-width text block, so definitions wrap
+ *  predictably and the same input always renders identically). */
+const GLOSSARY_W = 268
+const GLOSSARY_PAD = 12
+const GLOSSARY_HEAD = 26
+const GLOSSARY_LINE_H = 15
+const GLOSSARY_SIZE = 11
+/** Vertical gap between two glossary entries. */
+const GLOSSARY_ENTRY_GAP = 7
+
 // textWidth() is deliberately generous so boxes never clip their text; that
 // padding is invisible inside a box, but the headline accent bar sits directly
 // under the rendered title, so scale the estimate to track the rendered glyph
@@ -371,6 +394,20 @@ const LEGEND_PAD = 12
 // font, renders a touch wider than the Verdana-tuned estimate) without a
 // noticeable overshoot.
 const TITLE_BAR_SCALE = 0.9
+
+/** Dedicated band (px) reserved for a group-zone label so its title clears the
+ *  member boxes instead of butting against them. Added on the label's side of
+ *  the zone: below the boxes for tinted zones, above them for dashed frames. */
+const ZONE_LABEL_H = 16
+
+/** Vertical offset of the content top: the canvas padding, plus room for the
+ *  chart title, plus (when a dashed group carries a label) enough room that its
+ *  top label never clips against the canvas edge on the first row. */
+function contentTop(chart: OrgChart, gaps: LayoutGaps): number {
+  const base = gaps.canvasPad + (chart.meta.showTitle && chart.meta.title.trim() ? 44 : 0)
+  const hasTopLabel = chart.groups.some((g) => g.style === 'dashed' && !!g.label?.trim())
+  return hasTopLabel ? Math.max(base, gaps.canvasPad + gaps.zonePad + ZONE_LABEL_H) : base
+}
 
 /** Shared tail: build zones, edges, legend, title, and bounds from already
  *  positioned boxes + connectors. Used by every layout strategy. */
@@ -399,9 +436,19 @@ function assemble(chart: OrgChart, placed: PlacedNode[], connectors: string[], g
       y2 = Math.max(y2, b.y + b.totalH)
     }
     if (x1 === Infinity) continue
+    // Reserve a label band on the side the title sits: below for tinted zones
+    // (label at the bottom), above for dashed frames (label at the top). The
+    // band widens the zone so the title clears the boxes it wraps.
+    const band = g.label && g.label.trim() ? ZONE_LABEL_H : 0
+    const topBand = g.style === 'dashed' ? band : 0
     zones.push({
       group: g,
-      rect: { x: x1 - gaps.zonePad, y: y1 - gaps.zonePad, w: x2 - x1 + 2 * gaps.zonePad, h: y2 - y1 + 2 * gaps.zonePad },
+      rect: {
+        x: x1 - gaps.zonePad,
+        y: y1 - gaps.zonePad - topBand,
+        w: x2 - x1 + 2 * gaps.zonePad,
+        h: y2 - y1 + 2 * gaps.zonePad + band,
+      },
     })
   }
 
@@ -441,6 +488,32 @@ function assemble(chart: OrgChart, placed: PlacedNode[], connectors: string[], g
     legend = { x: maxX + gaps.legendGap, y: minY, w, h, items: chart.legend }
   }
 
+  // Glossary / terms panel: a fixed-width text block in the right rail, stacked
+  // under the legend when both are present. Definitions wrap to the panel width.
+  let glossary: GlossaryLayout | null = null
+  const terms = chart.glossary ?? []
+  if (terms.length) {
+    const innerW = GLOSSARY_W - GLOSSARY_PAD * 2
+    const gx = maxX + gaps.legendGap
+    const gy = legend ? legend.y + legend.h + 16 : minY
+    const lines: GlossaryLayout['lines'] = []
+    let ly = gy + GLOSSARY_PAD + GLOSSARY_HEAD + GLOSSARY_SIZE
+    terms.forEach((t, ti) => {
+      const term = t.term.trim()
+      const label = term ? `${term}:` : ''
+      const combined = label ? (t.definition ? `${label} ${t.definition}` : label) : t.definition
+      const wrapped = wrapText(combined, GLOSSARY_SIZE, innerW)
+      wrapped.forEach((text, li) => {
+        lines.push({ text, boldLen: li === 0 ? label.length : 0, y: ly })
+        ly += GLOSSARY_LINE_H
+      })
+      if (ti < terms.length - 1) ly += GLOSSARY_ENTRY_GAP
+    })
+    const h = ly - GLOSSARY_LINE_H + GLOSSARY_SIZE + GLOSSARY_PAD - gy
+    const title = chart.meta.glossaryTitle?.trim() || 'Glossary'
+    glossary = { x: gx, y: gy, w: GLOSSARY_W, h, title, lines }
+  }
+
   // Headlines render all-caps at size 20 bold; measure that so the accent bar
   // (and the canvas) can size to the actual title width.
   const title =
@@ -453,12 +526,18 @@ function assemble(chart: OrgChart, placed: PlacedNode[], connectors: string[], g
         }
       : null
 
-  const contentRight = legend ? legend.x + legend.w : maxX
+  const contentRight = Math.max(
+    maxX,
+    legend ? legend.x + legend.w : 0,
+    glossary ? glossary.x + glossary.w : 0,
+  )
   const titleRight = title ? title.x + title.w : 0
   const width = Math.max(contentRight, titleRight) + gaps.canvasPad
-  const height = Math.max(maxY, legend ? legend.y + legend.h : 0) + gaps.canvasPad
+  const height =
+    Math.max(maxY, legend ? legend.y + legend.h : 0, glossary ? glossary.y + glossary.h : 0) +
+    gaps.canvasPad
 
-  return { placed, connectors, zones, comms, legend, title, width, height }
+  return { placed, connectors, zones, comms, legend, glossary, title, width, height }
 }
 
 /* --------------------------------------------------- manual overrides */
@@ -560,7 +639,7 @@ function layoutRadial(chart: OrgChart): Layout {
   const placed: PlacedNode[] = []
   const connectors: string[] = []
   const ox = g.canvasPad
-  const oy = g.canvasPad + (chart.meta.showTitle && chart.meta.title.trim() ? 44 : 0)
+  const oy = contentTop(chart, g)
   let clusterLeft = 0
 
   // A box sits at an arbitrary angle on its ring but is never rotated, so its
@@ -800,7 +879,7 @@ function layoutLayered(chart: OrgChart): Layout {
 
   // Row Y offsets (each row is as tall as its tallest box).
   const ox = g.canvasPad
-  const oy = g.canvasPad + (chart.meta.showTitle && chart.meta.title.trim() ? 44 : 0)
+  const oy = contentTop(chart, g)
   const rowY: number[] = []
   let yCursor = 0
   for (let L = 0; L <= maxLayer; L++) {
@@ -891,7 +970,7 @@ function layoutMatrix(chart: OrgChart): Layout {
   }
 
   const ox = g.canvasPad
-  const oy = g.canvasPad + (chart.meta.showTitle && chart.meta.title.trim() ? 44 : 0)
+  const oy = contentTop(chart, g)
   const colX: number[] = []
   let xCursor = ox
   for (let ci = 0; ci < cols.length; ci++) {
@@ -933,7 +1012,7 @@ function layoutSwimlane(chart: OrgChart): Layout {
   const cols = assignColumns(chart, model)
 
   const ox = g.canvasPad
-  const oy = g.canvasPad + (chart.meta.showTitle && chart.meta.title.trim() ? 44 : 0)
+  const oy = contentTop(chart, g)
   const laneW = cols.map((c) => Math.max(0, ...c.ids.map((id) => measured.get(id)!.w)))
 
   const placed: PlacedNode[] = []
@@ -975,7 +1054,7 @@ export function layoutChart(chart: OrgChart): Layout {
   // 2) Map logical -> screen for the chosen direction. The title always sits at
   //    the top-left, so content is offset down by its height regardless of flow.
   const ox = g.canvasPad
-  const oy = g.canvasPad + (chart.meta.showTitle && chart.meta.title.trim() ? 44 : 0)
+  const oy = contentTop(chart, g)
   const maxMain = raw.reduce((mx, r) => Math.max(mx, r.main + r.m.mainSize), 0)
 
   const mapX = (cross: number, main: number) =>

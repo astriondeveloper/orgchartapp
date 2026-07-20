@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { layoutChart, textWidth, wrapText } from './layout'
 import type { OrgChart } from './model'
 import { templates } from './templates'
+import { zoneFill } from './theme'
+import type { ZoneStyle } from './theme'
 
 describe('text metrics', () => {
   it('measures wider strings as wider', () => {
@@ -182,6 +184,101 @@ describe('density', () => {
 
   it('defaults to comfortable', () => {
     expect(layoutChart(build()).width).toBe(layoutChart(build('comfortable')).width)
+  })
+})
+
+describe('group zone labels', () => {
+  const chart = (label: string | undefined, style: ZoneStyle): OrgChart => ({
+    version: 1,
+    meta: { title: 'Z', showTitle: true },
+    roots: [
+      {
+        id: 'r',
+        title: 'Root',
+        variant: 'primary',
+        children: [
+          { id: 'a', title: 'A', variant: 'secondary' },
+          { id: 'b', title: 'B', variant: 'secondary' },
+        ],
+      },
+    ],
+    groups: [{ id: 'g', label, style, memberIds: ['a', 'b'] }],
+    comms: [],
+    legend: [],
+    glossary: [],
+  })
+  const zone = (c: OrgChart) => layoutChart(c).zones[0]
+  const lowestMemberBottom = (c: OrgChart) => {
+    const ps = layoutChart(c).placed.filter((p) => p.node.id === 'a' || p.node.id === 'b')
+    return Math.max(...ps.map((p) => p.y + p.totalH))
+  }
+
+  it('reserves a label band below a tinted zone so the title clears the boxes', () => {
+    const labeled = zone(chart('Mission Focus', 'green'))
+    const bare = zone(chart(undefined, 'green'))
+    expect(labeled.rect.h).toBeGreaterThan(bare.rect.h)
+    // The zone bottom sits clearly below the lowest member box (room for a label).
+    const c = chart('Mission Focus', 'green')
+    expect(zone(c).rect.y + zone(c).rect.h - lowestMemberBottom(c)).toBeGreaterThan(24)
+  })
+
+  it('reserves a label band above a dashed frame and never clips the canvas', () => {
+    const labeled = zone(chart('PMO', 'dashed'))
+    const bare = zone(chart(undefined, 'dashed'))
+    expect(labeled.rect.y).toBeLessThan(bare.rect.y) // grows upward for the top label
+    expect(labeled.rect.h).toBeGreaterThan(bare.rect.h)
+    // Even with a title-less chart, the top-labeled dashed zone stays on-canvas.
+    const noTitle = layoutChart({
+      ...chart('PMO', 'dashed'),
+      meta: { title: '', showTitle: false },
+    })
+    expect(Math.min(...noTitle.zones.map((z) => z.rect.y))).toBeGreaterThanOrEqual(0)
+    expect(Math.min(...noTitle.placed.map((p) => p.y))).toBeGreaterThanOrEqual(0)
+  })
+
+  it('offers tint fills for every zone color in the expanded palette', () => {
+    for (const s of ['green', 'blue', 'orange', 'purple', 'red', 'gray', 'water', 'teal'] as const) {
+      expect(zoneFill[s]).toMatch(/^#[0-9A-Fa-f]{6}$/)
+    }
+  })
+})
+
+describe('glossary panel', () => {
+  const withGlossary = (glossary: OrgChart['glossary'], glossaryTitle?: string): OrgChart => ({
+    version: 1,
+    meta: { title: 'G', showTitle: true, ...(glossaryTitle ? { glossaryTitle } : {}) },
+    roots: [{ id: 'a', title: 'A', variant: 'primary' }],
+    groups: [],
+    comms: [],
+    legend: [],
+    glossary,
+  })
+
+  it('is null with no terms and lays out a panel with terms', () => {
+    const none = layoutChart(withGlossary([]))
+    expect(none.glossary).toBeNull()
+
+    const l = layoutChart(
+      withGlossary([
+        { id: 't1', term: 'LCAT', definition: 'Labor Category' },
+        { id: 't2', term: 'PM', definition: 'Program Manager over the whole program office and its staff' },
+      ]),
+    )
+    expect(l.glossary).not.toBeNull()
+    expect(l.glossary!.w).toBeGreaterThan(0)
+    expect(l.glossary!.h).toBeGreaterThan(0)
+    // First entry starts bold (the term); the long definition wraps past 2 lines.
+    expect(l.glossary!.lines.length).toBeGreaterThan(2)
+    expect(l.glossary!.lines[0].boldLen).toBeGreaterThan(0)
+    // The canvas widens to include the panel.
+    expect(l.width).toBeGreaterThan(none.width)
+  })
+
+  it('defaults the heading to "Glossary" and honors a custom one', () => {
+    expect(layoutChart(withGlossary([{ id: 't1', term: 'X', definition: 'Y' }])).glossary!.title).toBe('Glossary')
+    expect(
+      layoutChart(withGlossary([{ id: 't1', term: 'X', definition: 'Y' }], 'Acronyms')).glossary!.title,
+    ).toBe('Acronyms')
   })
 })
 
