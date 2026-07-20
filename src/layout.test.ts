@@ -185,6 +185,45 @@ describe('density', () => {
   })
 })
 
+describe('glossary panel', () => {
+  const withGlossary = (glossary: OrgChart['glossary'], glossaryTitle?: string): OrgChart => ({
+    version: 1,
+    meta: { title: 'G', showTitle: true, ...(glossaryTitle ? { glossaryTitle } : {}) },
+    roots: [{ id: 'a', title: 'A', variant: 'primary' }],
+    groups: [],
+    comms: [],
+    legend: [],
+    glossary,
+  })
+
+  it('is null with no terms and lays out a panel with terms', () => {
+    const none = layoutChart(withGlossary([]))
+    expect(none.glossary).toBeNull()
+
+    const l = layoutChart(
+      withGlossary([
+        { id: 't1', term: 'LCAT', definition: 'Labor Category' },
+        { id: 't2', term: 'PM', definition: 'Program Manager over the whole program office and its staff' },
+      ]),
+    )
+    expect(l.glossary).not.toBeNull()
+    expect(l.glossary!.w).toBeGreaterThan(0)
+    expect(l.glossary!.h).toBeGreaterThan(0)
+    // First entry starts bold (the term); the long definition wraps past 2 lines.
+    expect(l.glossary!.lines.length).toBeGreaterThan(2)
+    expect(l.glossary!.lines[0].boldLen).toBeGreaterThan(0)
+    // The canvas widens to include the panel.
+    expect(l.width).toBeGreaterThan(none.width)
+  })
+
+  it('defaults the heading to "Glossary" and honors a custom one', () => {
+    expect(layoutChart(withGlossary([{ id: 't1', term: 'X', definition: 'Y' }])).glossary!.title).toBe('Glossary')
+    expect(
+      layoutChart(withGlossary([{ id: 't1', term: 'X', definition: 'Y' }], 'Acronyms')).glossary!.title,
+    ).toBe('Acronyms')
+  })
+})
+
 describe('size overrides', () => {
   const build = (over: { width?: number; height?: number }): OrgChart => ({
     version: 1,

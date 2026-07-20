@@ -350,7 +350,7 @@ function LegendMarkerGlyph({ marker, x, y }: { marker: LegendMarker; x: number; 
 }
 
 export function ChartSvg({ layout, selectedId, onSelect, onNodePointerDown, onResizeStart, ariaLabel }: Props) {
-  const { placed, connectors, zones, comms, legend, title, width, height } = layout
+  const { placed, connectors, zones, comms, legend, glossary, title, width, height } = layout
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -529,6 +529,50 @@ export function ChartSvg({ layout, selectedId, onSelect, onNodePointerDown, onRe
               </g>
             )
           })}
+        </g>
+      )}
+
+      {glossary && (
+        <g>
+          <rect
+            x={glossary.x}
+            y={glossary.y}
+            width={glossary.w}
+            height={glossary.h}
+            fill={brand.white}
+            stroke="#BDBDBD"
+            strokeWidth={1}
+            rx={4}
+          />
+          <text
+            x={glossary.x + 12}
+            y={glossary.y + 20}
+            fontSize={12}
+            fontWeight={700}
+            fill={brand.heading}
+            fontFamily={brand.fontFamily}
+          >
+            {glossary.title}
+          </text>
+          {glossary.lines.map((ln, i) => (
+            <text
+              key={i}
+              x={glossary.x + 12}
+              y={ln.y}
+              fontSize={11}
+              fill={brand.detailText}
+              fontFamily={brand.fontFamily}
+            >
+              {ln.boldLen ? (
+                <>
+                  <tspan fontWeight={700}>{ln.text.slice(0, ln.boldLen)}</tspan>
+                  {ln.text.slice(ln.boldLen)}
+                </>
+              ) : (
+                ln.text
+              )}
+            </text>
+          ))}
         </g>
       )}
 

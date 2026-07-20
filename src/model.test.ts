@@ -219,6 +219,37 @@ describe('normalizeChart', () => {
   })
 })
 
+describe('glossary', () => {
+  it('defaults glossary to an empty array when absent', () => {
+    const chart = normalizeChart({ roots: [{ id: 'a', title: 'A', variant: 'primary' }] })
+    expect(chart.glossary).toEqual([])
+  })
+
+  it('keeps valid terms, drops empty/garbage, and assigns a missing id', () => {
+    const chart = normalizeChart({
+      roots: [{ id: 'a', title: 'A', variant: 'primary' }],
+      glossary: [
+        { id: 't1', term: 'LCAT', definition: 'Labor Category' },
+        { term: 'PM', definition: 'Program Manager' }, // missing id
+        { term: '   ', definition: '  ' }, // blank -> dropped
+        'nope', // not an object -> dropped
+      ],
+    })
+    expect(chart.glossary).toHaveLength(2)
+    expect(chart.glossary?.[0]).toEqual({ id: 't1', term: 'LCAT', definition: 'Labor Category' })
+    expect(chart.glossary?.[1].term).toBe('PM')
+    expect(chart.glossary?.[1].id).toBeTruthy()
+  })
+
+  it('preserves a custom glossary heading', () => {
+    const chart = normalizeChart({
+      meta: { title: 'T', showTitle: true, glossaryTitle: 'Acronyms' },
+      roots: [{ id: 'a', title: 'A', variant: 'primary' }],
+    })
+    expect(chart.meta.glossaryTitle).toBe('Acronyms')
+  })
+})
+
 describe('edges', () => {
   it('edgeArrow migrates twoWay and honors an explicit arrow', () => {
     expect(edgeArrow({ id: 'e', fromId: 'a', toId: 'b' })).toBe('both')

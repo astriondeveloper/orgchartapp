@@ -104,10 +104,31 @@ function normalizeEdge(e: CommLink): CommLink {
   return out
 }
 
+/** Coerce one untrusted glossary entry to the current shape, or drop it (return
+ *  null) when it carries neither a term nor a definition. */
+function normalizeGlossaryTerm(input: unknown): GlossaryTerm | null {
+  if (!input || typeof input !== 'object') return null
+  const g = input as Partial<GlossaryTerm>
+  const term = typeof g.term === 'string' ? g.term : ''
+  const definition = typeof g.definition === 'string' ? g.definition : ''
+  if (!term.trim() && !definition.trim()) return null
+  return { id: typeof g.id === 'string' && g.id ? g.id : uid('t'), term, definition }
+}
+
 export interface LegendItem {
   id: string
   marker: LegendMarker
   label: string
+}
+
+/** One glossary / terms entry: a short term or acronym and its definition.
+ *  Rendered as a text panel on the chart (e.g. an acronym key on a proposal). */
+export interface GlossaryTerm {
+  id: string
+  /** Short term or acronym, e.g. "LCAT". */
+  term: string
+  /** What it means, e.g. "Labor Category". */
+  definition: string
 }
 
 /** Flow direction of the auto-layout: top-down, bottom-up, left-right, right-left. */
@@ -127,12 +148,23 @@ export type Density = 'comfortable' | 'compact'
 
 export interface OrgChart {
   version: 1
-  meta: { title: string; showTitle: boolean; direction?: Direction; layout?: LayoutMode; density?: Density }
+  meta: {
+    title: string
+    showTitle: boolean
+    direction?: Direction
+    layout?: LayoutMode
+    density?: Density
+    /** Heading for the glossary panel (defaults to "Glossary"). */
+    glossaryTitle?: string
+  }
   /** Independent trees/columns laid out left to right. */
   roots: OrgNode[]
   groups: Group[]
   comms: CommLink[]
   legend: LegendItem[]
+  /** Term / definition entries rendered as a panel on the chart. Optional so
+   *  older charts (and template fixtures) load unchanged. */
+  glossary?: GlossaryTerm[]
 }
 
 let counter = 0
@@ -157,6 +189,7 @@ export function emptyChart(): OrgChart {
     groups: [],
     comms: [],
     legend: [],
+    glossary: [],
   }
 }
 
@@ -408,6 +441,7 @@ export function normalizeChart(input: unknown): OrgChart {
   const layoutOk = typeof layout === 'string' && LAYOUTS.includes(layout)
   const density = c.meta?.density
   const densityOk = density === 'comfortable' || density === 'compact'
+  const glossaryTitle = c.meta?.glossaryTitle
   const chart: OrgChart = {
     version: CHART_VERSION,
     meta: {
@@ -416,11 +450,15 @@ export function normalizeChart(input: unknown): OrgChart {
       ...(dirOk ? { direction: dir } : {}),
       ...(layoutOk ? { layout } : {}),
       ...(densityOk ? { density } : {}),
+      ...(typeof glossaryTitle === 'string' ? { glossaryTitle } : {}),
     },
     roots: c.roots as OrgNode[],
     groups: Array.isArray(c.groups) ? c.groups : [],
     comms: Array.isArray(c.comms) ? c.comms.map(normalizeEdge) : [],
     legend: Array.isArray(c.legend) ? c.legend : [],
+    glossary: Array.isArray(c.glossary)
+      ? c.glossary.map(normalizeGlossaryTerm).filter((t): t is GlossaryTerm => t !== null)
+      : [],
   }
   return sanitizeSizes(sanitizePositions(sanitizeColors(chart)))
 }

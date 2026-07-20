@@ -68,6 +68,18 @@ export interface LegendLayout {
   items: LegendItem[]
 }
 
+export interface GlossaryLayout {
+  x: number
+  y: number
+  w: number
+  h: number
+  /** Panel heading (e.g. "Glossary" / "Acronyms"). */
+  title: string
+  /** Pre-positioned text lines. The first `boldLen` chars of a line render bold
+   *  (the term); wrapped continuation lines carry boldLen 0. */
+  lines: { text: string; boldLen: number; y: number }[]
+}
+
 export interface Layout {
   placed: PlacedNode[]
   /** Reporting-line connector paths. */
@@ -75,6 +87,7 @@ export interface Layout {
   zones: Zone[]
   comms: CommPath[]
   legend: LegendLayout | null
+  glossary: GlossaryLayout | null
   title: { text: string; x: number; y: number; w: number } | null
   width: number
   height: number
@@ -364,6 +377,16 @@ function routeComm(a: Rect, b: Rect): string {
 const LEGEND_ITEM_H = 24
 const LEGEND_PAD = 12
 
+/** Glossary panel geometry (a fixed-width text block, so definitions wrap
+ *  predictably and the same input always renders identically). */
+const GLOSSARY_W = 268
+const GLOSSARY_PAD = 12
+const GLOSSARY_HEAD = 26
+const GLOSSARY_LINE_H = 15
+const GLOSSARY_SIZE = 11
+/** Vertical gap between two glossary entries. */
+const GLOSSARY_ENTRY_GAP = 7
+
 // textWidth() is deliberately generous so boxes never clip their text; that
 // padding is invisible inside a box, but the headline accent bar sits directly
 // under the rendered title, so scale the estimate to track the rendered glyph
@@ -441,6 +464,32 @@ function assemble(chart: OrgChart, placed: PlacedNode[], connectors: string[], g
     legend = { x: maxX + gaps.legendGap, y: minY, w, h, items: chart.legend }
   }
 
+  // Glossary / terms panel: a fixed-width text block in the right rail, stacked
+  // under the legend when both are present. Definitions wrap to the panel width.
+  let glossary: GlossaryLayout | null = null
+  const terms = chart.glossary ?? []
+  if (terms.length) {
+    const innerW = GLOSSARY_W - GLOSSARY_PAD * 2
+    const gx = maxX + gaps.legendGap
+    const gy = legend ? legend.y + legend.h + 16 : minY
+    const lines: GlossaryLayout['lines'] = []
+    let ly = gy + GLOSSARY_PAD + GLOSSARY_HEAD + GLOSSARY_SIZE
+    terms.forEach((t, ti) => {
+      const term = t.term.trim()
+      const label = term ? `${term}:` : ''
+      const combined = label ? (t.definition ? `${label} ${t.definition}` : label) : t.definition
+      const wrapped = wrapText(combined, GLOSSARY_SIZE, innerW)
+      wrapped.forEach((text, li) => {
+        lines.push({ text, boldLen: li === 0 ? label.length : 0, y: ly })
+        ly += GLOSSARY_LINE_H
+      })
+      if (ti < terms.length - 1) ly += GLOSSARY_ENTRY_GAP
+    })
+    const h = ly - GLOSSARY_LINE_H + GLOSSARY_SIZE + GLOSSARY_PAD - gy
+    const title = chart.meta.glossaryTitle?.trim() || 'Glossary'
+    glossary = { x: gx, y: gy, w: GLOSSARY_W, h, title, lines }
+  }
+
   // Headlines render all-caps at size 20 bold; measure that so the accent bar
   // (and the canvas) can size to the actual title width.
   const title =
@@ -453,12 +502,18 @@ function assemble(chart: OrgChart, placed: PlacedNode[], connectors: string[], g
         }
       : null
 
-  const contentRight = legend ? legend.x + legend.w : maxX
+  const contentRight = Math.max(
+    maxX,
+    legend ? legend.x + legend.w : 0,
+    glossary ? glossary.x + glossary.w : 0,
+  )
   const titleRight = title ? title.x + title.w : 0
   const width = Math.max(contentRight, titleRight) + gaps.canvasPad
-  const height = Math.max(maxY, legend ? legend.y + legend.h : 0) + gaps.canvasPad
+  const height =
+    Math.max(maxY, legend ? legend.y + legend.h : 0, glossary ? glossary.y + glossary.h : 0) +
+    gaps.canvasPad
 
-  return { placed, connectors, zones, comms, legend, title, width, height }
+  return { placed, connectors, zones, comms, legend, glossary, title, width, height }
 }
 
 /* --------------------------------------------------- manual overrides */
