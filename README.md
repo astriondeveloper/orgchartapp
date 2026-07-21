@@ -78,6 +78,34 @@ later `Load JSON` and get a pixel-identical chart, tweak names or PWS numbers, a
 re-export. Nothing is hand-positioned, so charts never drift off-style between
 volumes or authors.
 
+## U.S. Map chart type
+
+Alongside org charts, the tool can build a **U.S. map of where a contract's labor
+sits** — useful when a 40-plus-position program spreads across many locations.
+Choose **"🗺 U.S. Map (LCATs by location)…"** from the "New from template…" menu to
+switch into it (your org chart is kept in its own slot; switch back anytime with
+"Org chart…").
+
+- **Sites** — each work location is a star on an accurate U.S. map (real Census
+  boundary, Alaska/Hawaii inset). Place a site by picking a city or installation
+  from the built-in list, or drag its star anywhere.
+- **Positions / LCATs** — each site carries a roster of positions, each with a
+  title, an optional LCAT label, an **FTE count**, and a **key-personnel count**.
+  Site and grand totals are computed automatically.
+- **Legible at scale** — a busy site can **collapse to a one-line total chip**;
+  roster cards can be **dragged** into open space (a leader line follows) and
+  **resized** by their edge handle.
+- **OCONUS** — mark a site OCONUS (or pick an overseas location) and it lists in a
+  labeled strip below the map, mirroring how Alaska/Hawaii are inset on a U.S. map.
+- **Same exports** — SVG / PNG / PPTX / PDF and JSON save/load all work, and the
+  map is brand-locked (Supernova stars, Force cards).
+
+The map geometry and the location list are generated once by
+`scripts/gen-usmap.mjs` (from `us-atlas` + `d3-geo`, dev-only) and inlined into
+`src/usMapData.ts` and `src/locations.ts`, so the app keeps no runtime map
+dependency and every export stays sharp. Rerun the script after editing
+`scripts/locations.source.json` to add locations.
+
 ## Branding
 
 Every color, font, and layout metric lives in **`src/theme.ts`**, with values
@@ -167,6 +195,13 @@ Tips:
 | `src/templates.ts` | Starter charts modeled on Astrion proposal patterns |
 | `src/SidePanel.tsx` | Structured editor (boxes, zones, comms, legend, JSON) |
 | `src/export.ts` | SVG / high-DPI PNG / JSON export |
+| `src/Root.tsx` | Routes between the org chart and the U.S. map document kinds |
+| `src/mapModel.ts` | U.S. map document types + editing helpers + normalizer |
+| `src/mapLayout.ts` | Deterministic map layout (stars, cards, chips, OCONUS strip) |
+| `src/MapSvg.tsx` | Pure SVG renderer for the map (export-safe) |
+| `src/MapApp.tsx` / `src/MapEditor.tsx` | Map workspace and its side-panel editor |
+| `src/usMapData.ts` / `src/locations.ts` | Generated map geometry + location list |
+| `scripts/gen-usmap.mjs` | Dev-only regenerator for the two generated files |
 
 ## Deployment
 

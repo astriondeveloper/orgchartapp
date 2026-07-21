@@ -18,6 +18,8 @@ interface Props {
   onStarPointerDown?: (id: string, e: ReactPointerEvent) => void
   /** Begin dragging a site's roster card. */
   onCardPointerDown?: (id: string, e: ReactPointerEvent) => void
+  /** Begin resizing a site's roster card from its edge handle. */
+  onCardResizeStart?: (id: string, e: ReactPointerEvent) => void
   ariaLabel?: string
 }
 
@@ -44,11 +46,13 @@ function Card({
   selected,
   onSelect,
   onPointerDown,
+  onResizeStart,
 }: {
   c: PlacedCard
   selected: boolean
   onSelect?: (id: string) => void
   onPointerDown?: (id: string, e: ReactPointerEvent) => void
+  onResizeStart?: (id: string, e: ReactPointerEvent) => void
 }) {
   const padX = 12
   const headerH = c.headerH
@@ -100,7 +104,25 @@ function Card({
       </text>
       {els}
       {selected && (
-        <rect data-ui="selection" x={c.x - 3} y={c.y - 3} width={c.w + 6} height={c.totalH + 6} rx={10} fill="none" stroke={brand.marker} strokeWidth={2} strokeDasharray="5 3" />
+        <>
+          <rect data-ui="selection" x={c.x - 3} y={c.y - 3} width={c.w + 6} height={c.totalH + 6} rx={10} fill="none" stroke={brand.marker} strokeWidth={2} strokeDasharray="5 3" />
+          {onResizeStart && (
+            <rect
+              data-ui="resize"
+              x={c.x + c.w - 4.5}
+              y={c.y + c.headerH / 2 - 4.5}
+              width={9}
+              height={9}
+              rx={2}
+              fill={brand.white}
+              stroke={brand.marker}
+              strokeWidth={1.5}
+              style={{ cursor: 'ew-resize' }}
+              onPointerDown={(e) => { e.stopPropagation(); onResizeStart(c.site.id, e) }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
+        </>
       )}
     </g>
   )
@@ -140,7 +162,7 @@ function StripRow({ e }: { e: StripEntry }) {
   )
 }
 
-export function MapSvg({ layout, selectedId, onSelect, onStarPointerDown, onCardPointerDown, ariaLabel }: Props) {
+export function MapSvg({ layout, selectedId, onSelect, onStarPointerDown, onCardPointerDown, onCardResizeStart, ariaLabel }: Props) {
   const { ox, oy, width, height, title } = layout
   return (
     <svg
@@ -191,6 +213,7 @@ export function MapSvg({ layout, selectedId, onSelect, onStarPointerDown, onCard
             selected={c.site.id === selectedId}
             onSelect={onSelect}
             onPointerDown={onCardPointerDown}
+            onResizeStart={onCardResizeStart}
           />
         ))}
 

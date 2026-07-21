@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { layoutMap } from './mapLayout'
-import type { MapChart } from './mapModel'
+import { MAP_MIN_CARD_WIDTH, type MapChart } from './mapModel'
 
 const chart = (): MapChart => ({
   version: 1,
@@ -57,6 +57,15 @@ describe('layoutMap', () => {
     const l = layoutMap(c)
     expect(l.strip!.entries.some((e) => e.site.id === 'hsv')).toBe(true)
     expect(l.stars.some((s) => s.site.id === 'hsv')).toBe(false)
+  })
+
+  it('honors a card width override, clamped to the minimum', () => {
+    const wide = chart()
+    wide.sites[0].cardWidth = 260
+    expect(layoutMap(wide).cards[0].w).toBe(260)
+    const tiny = chart()
+    tiny.sites[0].cardWidth = 10
+    expect(layoutMap(tiny).cards[0].w).toBe(MAP_MIN_CARD_WIDTH)
   })
 
   it('is deterministic', () => {

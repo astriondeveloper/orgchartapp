@@ -40,6 +40,8 @@ export interface MapSite {
   geo?: XY
   /** Roster-card top-left in map space (manual placement). */
   card?: XY
+  /** Roster-card width in px (drag the card's edge handle). */
+  cardWidth?: number
   /** Render a one-line total-chip instead of the full roster. */
   collapsed?: boolean
   /** Force this site into the OCONUS strip (no map point). */
@@ -169,6 +171,16 @@ export function setSiteCard(chart: MapChart, id: string, card: XY | null): MapCh
   return next
 }
 
+export function setSiteCardWidth(chart: MapChart, id: string, width: number | null): MapChart {
+  const next = clone(chart)
+  const s = next.sites.find((x) => x.id === id)
+  if (s) {
+    if (width == null) delete s.cardWidth
+    else s.cardWidth = Math.max(MAP_MIN_CARD_WIDTH, Math.round(width))
+  }
+  return next
+}
+
 export function addLcat(chart: MapChart, siteId: string): { chart: MapChart; newId: string } {
   const next = clone(chart)
   const s = next.sites.find((x) => x.id === siteId)
@@ -243,6 +255,9 @@ function normalizeSite(input: unknown): MapSite | null {
   if (typeof s.locationId === 'string' && s.locationId) site.locationId = s.locationId
   if (isFiniteXY(s.geo)) site.geo = { x: s.geo.x, y: s.geo.y }
   if (isFiniteXY(s.card)) site.card = { x: s.card.x, y: s.card.y }
+  if (typeof s.cardWidth === 'number' && Number.isFinite(s.cardWidth) && s.cardWidth > 0) {
+    site.cardWidth = Math.max(MAP_MIN_CARD_WIDTH, Math.round(s.cardWidth))
+  }
   if (s.oconus === true) site.oconus = true
   if (s.collapsed === true) site.collapsed = true
   return site

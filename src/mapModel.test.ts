@@ -8,11 +8,13 @@ import {
   emptyMap,
   findSite,
   isStripSite,
+  MAP_MIN_CARD_WIDTH,
   mapFteTotal,
   mapKpTotal,
   moveLcat,
   normalizeMap,
   setSiteCard,
+  setSiteCardWidth,
   setSiteGeo,
   siteFte,
   siteKp,
@@ -94,6 +96,16 @@ describe('site + lcat editing', () => {
     m = setSiteGeo(m, 's1', null)
     expect(findSite(m, 's1')?.geo).toBeUndefined()
     expect(isStripSite(findSite(m, 's1')!)).toBe(true) // no geo => strip
+  })
+
+  it('sets, clamps, and clears card width', () => {
+    let m = base()
+    m = setSiteCardWidth(m, 's1', 20) // below the minimum -> clamped
+    expect(findSite(m, 's1')?.cardWidth).toBe(MAP_MIN_CARD_WIDTH)
+    m = setSiteCardWidth(m, 's1', 260)
+    expect(findSite(m, 's1')?.cardWidth).toBe(260)
+    m = setSiteCardWidth(m, 's1', null)
+    expect(findSite(m, 's1')?.cardWidth).toBeUndefined()
   })
 })
 

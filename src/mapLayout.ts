@@ -1,5 +1,5 @@
 import { textWidth, wrapText } from './layout'
-import { isStripSite, siteFte, siteKp, type MapChart, type MapSite, type XY } from './mapModel'
+import { isStripSite, MAP_MIN_CARD_WIDTH, siteFte, siteKp, type MapChart, type MapSite, type XY } from './mapModel'
 import { US_MAP } from './usMapData'
 
 /*
@@ -136,14 +136,15 @@ export function layoutMap(chart: MapChart): MapLayout {
     }
 
     const { headerH, totalH, rows } = measureCard(site)
-    const pos = site.card ?? autoCardPos(star, CARD_W, headerH, mapH)
-    cards.push({ site, star, x: pos.x, y: pos.y, w: CARD_W, headerH, totalH, fteTotal, kpTotal, rows })
+    const w = Math.max(MAP_MIN_CARD_WIDTH, site.cardWidth ?? CARD_W)
+    const pos = site.card ?? autoCardPos(star, w, headerH, mapH)
+    cards.push({ site, star, x: pos.x, y: pos.y, w, headerH, totalH, fteTotal, kpTotal, rows })
     // Leader from the star to the near vertical edge of the card header.
     const toRight = pos.x >= star.x
     leaders.push({
       x1: star.x,
       y1: star.y,
-      x2: toRight ? pos.x : pos.x + CARD_W,
+      x2: toRight ? pos.x : pos.x + w,
       y2: pos.y + headerH / 2,
     })
   }

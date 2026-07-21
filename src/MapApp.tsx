@@ -12,8 +12,10 @@ import { layoutMap } from './mapLayout'
 import {
   addSite,
   emptyMap,
+  MAP_MIN_CARD_WIDTH,
   normalizeMap,
   setSiteCard,
+  setSiteCardWidth,
   setSiteGeo,
   type MapChart,
 } from './mapModel'
@@ -48,7 +50,7 @@ interface Props {
   onLoadForeign: (doc: ReturnType<typeof normalizeDocument>) => void
 }
 
-type Drag = { id: string; kind: 'star' | 'card'; x: number; y: number }
+type Drag = { id: string; kind: 'star' | 'card' | 'resize'; x: number; y: number }
 
 export function MapApp({ onSwitchToOrg, onLoadForeign }: Props) {
   const [doc, setDocRaw] = useState<MapChart>(loadInitial)
@@ -119,7 +121,9 @@ export function MapApp({ onSwitchToOrg, onLoadForeign }: Props) {
     const moved =
       drag.kind === 'star'
         ? setSiteGeo(doc, drag.id, { x: drag.x, y: drag.y })
-        : setSiteCard(doc, drag.id, { x: drag.x, y: drag.y })
+        : drag.kind === 'card'
+          ? setSiteCard(doc, drag.id, { x: drag.x, y: drag.y })
+          : setSiteCardWidth(doc, drag.id, drag.x)
     return layoutMap(moved)
   }, [doc, layout, drag])
 
@@ -215,6 +219,60 @@ export function MapApp({ onSwitchToOrg, onLoadForeign }: Props) {
 
   const onStarPointerDown = useCallback((id: string, e: ReactPointerEvent) => startDrag(id, 'star')(e), [startDrag])
   const onCardPointerDown = useCallback((id: string, e: ReactPointerEvent) => startDrag(id, 'card')(e), [startDrag])
+
+  // Resize a card by dragging its edge handle (sets the site's card width).
+  const onCardResizeStart = useCallback(
+    (id: string, e: ReactPointerEvent) => {
+      movedRef.current = false
+      if (e.button !== 0 || draggingRef.current) return
+      const placed = layout.cards.find((c) => c.site.id === id)
+      if (!placed) return
+      e.stopPropagation()
+      setSelectedId(id)
+      draggingRef.current = true
+      const startX = e.clientX
+      const baseW = placed.w
+      const baseDoc = doc
+      let moved = false
+      let curW = baseW
+      let raf = 0
+      const flush = () => {
+        raf = 0
+        setDrag({ id, kind: 'resize', x: curW, y: 0 })
+      }
+      const onMove = (ev: PointerEvent) => {
+        const dx = ev.clientX - startX
+        if (!moved && Math.abs(dx) < 4) return
+        if (!moved) {
+          moved = true
+          document.body.style.userSelect = 'none'
+          document.body.style.cursor = 'ew-resize'
+        }
+        const z = zoomRef.current
+        const step = ev.altKey ? 1 : SNAP
+        curW = Math.max(MAP_MIN_CARD_WIDTH, Math.round((baseW + dx / z) / step) * step)
+        if (!raf) raf = requestAnimationFrame(flush)
+      }
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        window.removeEventListener('pointercancel', onUp)
+        if (raf) cancelAnimationFrame(raf)
+        document.body.style.userSelect = ''
+        document.body.style.cursor = ''
+        draggingRef.current = false
+        if (moved) {
+          movedRef.current = true
+          setDoc(setSiteCardWidth(baseDoc, id, curW))
+        }
+        setDrag(null)
+      }
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+      window.addEventListener('pointercancel', onUp)
+    },
+    [layout.cards, doc, setDoc],
+  )
 
   const selectSite = useCallback((id: string) => {
     if (movedRef.current) {
@@ -365,6 +423,7 @@ export function MapApp({ onSwitchToOrg, onLoadForeign }: Props) {
                   onSelect={selectSite}
                   onStarPointerDown={onStarPointerDown}
                   onCardPointerDown={onCardPointerDown}
+                  onCardResizeStart={onCardResizeStart}
                   ariaLabel={`${doc.meta.title || 'U.S.'} map, ${doc.sites.length} sites`}
                 />
               </div>

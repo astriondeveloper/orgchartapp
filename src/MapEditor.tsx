@@ -10,6 +10,8 @@ import {
   mapFteTotal,
   mapKpTotal,
   moveLcat,
+  setSiteCard,
+  setSiteCardWidth,
   siteFte,
   siteKp,
   updateLcat,
@@ -110,6 +112,17 @@ function SiteEditor({ chart, onChange, selectedId, onSelect }: Omit<Props, 'widt
       </div>
       {!site.geo && !site.oconus && (
         <p className="hint">No position yet. Pick a location above, or drag a star onto the map.</p>
+      )}
+      {(site.card || site.cardWidth) && (
+        <div className="btn-row">
+          <button
+            className="sm"
+            onClick={() => onChange(setSiteCardWidth(setSiteCard(chart, site.id, null), site.id, null))}
+          >
+            ⤺ Reset card position &amp; size
+          </button>
+          <span className="hint">Drag the card to move it; drag its edge handle to resize.</span>
+        </div>
       )}
 
       <fieldset>
