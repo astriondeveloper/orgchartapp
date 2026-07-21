@@ -19,9 +19,13 @@ Legibility at real density is the first success criterion.
 
 ### Goals
 - A U.S. map graphic with a star at each work location, a roster of that location's
-  LCATs (each with an FTE count and a key-personnel count), and computed site totals.
+  positions (each with a position title, an optional LCAT label, an FTE count, and a
+  key-personnel count), and computed site totals.
 - An OCONUS section for positions the map cannot place.
 - Accurate U.S. geography (real Census boundary, correct projected star positions).
+- **Painless, on-map direct editing.** Every element (stars, roster cards, LCAT rows)
+  is added, moved (drag and drop), resized, and edited in place on the canvas, with no
+  need to touch JSON. Positions persist so the layout stays reproducible.
 - Stays legible at 40-plus LCATs across a dozen-plus sites.
 - Brand-locked (Astrion palette) and export-clean (SVG / PNG / PDF / PPTX), matching
   the rest of the tool.
@@ -45,6 +49,9 @@ Legibility at real density is the first success criterion.
 - At 12 sites / ~46 FTEs the map has no overlapping text in the default layout.
 - The exported SVG/PNG/PDF/PPTX contains no editor chrome (handles, selection, leader
   drag targets).
+- A user can build and rearrange a map entirely by direct manipulation on the canvas
+  (add sites, drop stars, drag and resize cards, edit position/LCAT rows) without
+  editing JSON.
 - Loading a map JSON produces a pixel-identical render across machines and sessions.
 - Existing org charts continue to load and render unchanged.
 
@@ -96,9 +103,10 @@ sites. `theme.ts` gains map tokens (map fill, border, star). `LegendItem` and
 // src/mapModel.ts
 export interface MapLcat {
   id: string
-  title: string          // LCAT / role name, e.g. "Systems Engineer"
+  title: string          // position / role shown on the card row, e.g. "Program Manager"
+  lcat?: string          // optional labor-category label shown under the title
   fte: number            // full-time equivalents, >= 0
-  keyPersonnel: number   // key personnel within this LCAT, >= 0
+  keyPersonnel: number   // key personnel within this position, >= 0
 }
 
 export interface MapSite {
@@ -123,6 +131,9 @@ export interface MapChart {
 ```
 
 Rules:
+- Each roster entry lists a staffed position: `title` (the role, shown bold) with an
+  optional `lcat` label beneath it, plus its FTE and key-personnel counts. A team can
+  show just the position, just the LCAT, or both.
 - Site FTE and key-personnel **totals are computed** from `lcats`, never stored, so
   they cannot drift.
 - A site renders **on the map** when it has a `geo` and is not `oconus`; otherwise it
@@ -187,7 +198,8 @@ Determinism: no `Date.now`/random; identical input yields identical output.
 
 - `<svg viewBox="0 0 W H">` with the nation fill (light brand wash), faint state
   borders, then stars (Supernova), leader lines, roster cards (Force header, white body
-  with LCAT rows and a gold key marker for key personnel), total-chips, the OCONUS
+  with a row per position showing the position title, an optional LCAT line beneath it,
+  the FTE count, and a gold key marker for key personnel), total-chips, the OCONUS
   strip, legend, glossary, and title.
 - All colors from `theme.ts`; no off-brand values. Inline attributes only, so the
   exported SVG is self-contained (same constraint the current renderer honors).
@@ -196,12 +208,17 @@ Determinism: no `Date.now`/random; identical input yields identical output.
 
 ## 10. Editing (`MapEditor.tsx`)
 
+Direct, painless editing is the priority: the canvas is the primary surface (add a
+site, drop its star, drag and resize its card, edit rows in place), and the side panel
+mirrors and complements it. Neither requires touching JSON.
+
 Side panel for a map document:
 - **Chart tab:** title, show-title, legend, and glossary editors (reused), plus a
   **Sites** section.
 - **Site:** name; **location** picker (bundled list, or "custom / place by drag");
-  OCONUS toggle; collapse-to-chip toggle; an **LCAT sub-editor** (rows of title, FTE,
-  key personnel; add / remove / reorder) with live site FTE/KP totals.
+  OCONUS toggle; collapse-to-chip toggle; an **LCAT sub-editor** (rows of position
+  title, optional LCAT label, FTE, key personnel; add / remove / reorder) with live
+  site FTE/KP totals.
 - **Add site** button; a grand-total readout (all sites) for planning.
 - Selecting a star or card on the canvas selects its site row, and vice versa.
 
