@@ -8,6 +8,7 @@ import {
 } from 'react'
 import { MapSvg } from './MapSvg'
 import { MapEditor } from './MapEditor'
+import { AppFooter } from './AppFooter'
 import { layoutMap } from './mapLayout'
 import {
   addSite,
@@ -431,6 +432,7 @@ export function MapApp({ onSwitchToOrg, onLoadForeign }: Props) {
           </div>
         </div>
       </div>
+      <AppFooter />
     </div>
   )
 }

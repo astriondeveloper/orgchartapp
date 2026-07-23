@@ -28,6 +28,7 @@ import { isMapDocument, normalizeDocument, type ChartDocument } from './document
 import { Minimap, type Viewport } from './Minimap'
 import { type Anchor, NodeToolbar } from './NodeToolbar'
 import { SidePanel } from './SidePanel'
+import { AppFooter } from './AppFooter'
 import { DEFAULT_TEMPLATE_KEY, templates } from './templates'
 
 const STORAGE_KEY = 'astrion-org-chart-v1'
@@ -926,6 +927,7 @@ export default function App({ onSwitchToMap, onLoadForeign }: AppProps = {}) {
           )}
         </div>
       </div>
+      <AppFooter />
     </div>
   )
 }
