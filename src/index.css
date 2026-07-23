@@ -142,6 +142,17 @@ body,
   background: var(--bg);
 }
 
+/* Permanent attribution footer at the bottom of the tool. */
+.app-footer {
+  flex: none;
+  padding: var(--space-2) var(--space-6);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  text-align: center;
+  border-top: 1px solid var(--border);
+}
+
 /* ------------------------------------------------------------ toolbar */
 .toolbar {
   display: flex;
